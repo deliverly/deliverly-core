@@ -1,0 +1,14 @@
+{application, deliverly,
+ [
+  {description, ""},
+  {vsn, "0.0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  lager,
+                  cowboy
+                 ]},
+  {mod, { deliverly_app, []}},
+  {env, []}
+ ]}.
