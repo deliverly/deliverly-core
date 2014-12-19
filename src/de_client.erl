@@ -7,8 +7,10 @@
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
 -export([
-  send/3,
-  close/2,
+  send/2,
+  close/1,
+  encode/2,
+  decode/2,
   broadcast_to/2,
   broadcast_to/3,
   close_all/1,
@@ -19,18 +21,34 @@
 %% Close client connection
 %% @end
 
--spec close(pid(), Client::client()) -> ok.
+-spec close(Client::client()) -> ok.
 
-close(_, #de_client{module = M} = Client) ->
+close(#de_client{module = M} = Client) ->
   M:close(Client).
 
 %% @doc
 %% Send data to client
 %% @end
 
--spec send(pid(), Data::any(), Client::client()) -> ok.
-send(_, Data, #de_client{module = M} = Client) ->
+-spec send(Client::client(), Data::any()) -> ok.
+send(#de_client{module = M} = Client, Data) ->
   M:send(Client,Data).
+
+%% @doc
+%% Encode data to send to client
+%% @end
+
+-spec encode(Client::client(), Data::any()) -> ok.
+encode(#de_client{encoder = M}, Data) ->
+  M:encode(Data).
+
+%% @doc
+%% Decode data received from client
+%% @end
+
+-spec decode(Client::client(), Data::any()) -> ok.
+decode(#de_client{encoder = M}, Data) ->
+  M:decode(Data).
 
 
 %% @doc
@@ -54,14 +72,14 @@ broadcast_to(Clients, Data) ->
 
 broadcast_to(Clients, Data, undefined) ->
   lists:foreach(
-      fun(Client) -> send(self(), Data, Client) end,
+      fun(Client) -> send(Client, Data) end,
       clients_to_list(Clients));
 
 broadcast_to(Clients, Data, Fun) when is_function(Fun,1) ->
   lists:foreach(
       fun(Client) -> 
         case Fun(Client) of
-          true -> send(self(), Data, Client);
+          true -> send(Client, Data);
           false -> pass
         end
       end,
@@ -98,14 +116,14 @@ close_all(Clients) ->
 
 close_all(Clients, undefined) ->
   lists:foreach(
-      fun(Client) -> close(self(), Client) end,
+      fun(Client) -> close(Client) end,
       clients_to_list(Clients));
 
 close_all(Clients, Fun) when is_function(Fun,1) ->
   lists:foreach(
       fun(Client) -> 
         case Fun(Client) of
-          true -> close(self(), Client);
+          true -> close(Client);
           false -> pass
         end
       end,
@@ -203,5 +221,20 @@ except_fun_test() ->
   ?assertNot(F4(Client2)),
   ?assertNot(F4(Client3)),
   ?assert(F4(Client)).
+
+decode_test() ->
+  C1 = #de_client{encoder=raw_encoder},
+  ?assertEqual({test, <<"binary">>}, decode(C1, {test, <<"binary">>})),
+
+  C2 = #de_client{encoder=json_encoder},
+  ?assertEqual(#{<<"test">> => <<"blabla">>}, decode(C2, {text, <<"{\"test\":\"blabla\"}">>})).
+
+
+encode_test() ->
+  C1 = #de_client{encoder=raw_encoder},
+  ?assertEqual({test, <<"binary">>}, encode(C1, {test, <<"binary">>})),
+
+  C2 = #de_client{encoder=json_encoder},
+  ?assertEqual({text, <<"{\"test\":\"blabla\"}">>}, encode(C2, #{<<"test">> => <<"blabla">>})).
 
 -endif.

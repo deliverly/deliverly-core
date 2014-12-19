@@ -25,13 +25,13 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
     ok.
 
-authorize(Client,[]) -> ok;
+authorize(Client,[]) -> {ok, Client};
 
 authorize(_,_) -> {error, undefined}.
 
 handle_message(_,_) -> ok.
 
-handle_client_message(_,_) -> ok.
+handle_client_message(Client,_) -> {ok, Client}.
 
 client_disconnected(_) -> ok.
 

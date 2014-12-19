@@ -110,8 +110,9 @@ handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, #state{a
           ?ACCESS("AUTH_FAILED ~p ~p ~p",[App,Client#de_client.path,Reason]),
           pass;
         _ -> 
-          ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client#de_client.path]),
-          ets:insert(?APP, Client)
+          Client2 = element(2, Res),
+          ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client2#de_client.path]),
+          ets:insert(?APP, Client2)
       end,
       {reply, Res, State}
   end;
@@ -133,6 +134,13 @@ handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From
       {reply, {error, noexist}, State};
     Handler -> 
       Res = Handler:handle_client_message(Client, Data),
+      
+      Client2 = element(2, Res),
+      if Client =/= Client2 ->
+        ets:insert(?APP, Client2);
+        true -> pass
+      end,
+      
       {reply, Res, State}
   end;
 
@@ -153,7 +161,7 @@ handle_call({apps_list}, _From, #state{apps=Apps} = State) ->
   {reply, maps:keys(Apps), State};
 
 handle_call(_Request, _From, State) ->
-  {reply, ok, State}.
+  {reply, unknown, State}.
 
 handle_cast(_Msg, State) ->
   {noreply, State}.

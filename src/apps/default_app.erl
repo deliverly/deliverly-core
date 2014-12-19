@@ -39,7 +39,7 @@ handle_client_message(Client,Message) -> gen_server:call(?SERVER, {handle_client
 client_disconnected(Client) -> gen_server:call(?SERVER, {client_disconnected, Client}).
 
 handle_call({authorize, #de_client{socket=Socket}=Client}, _, #state{clients = Clients, messages = History, clear_timer = undefined}=State) ->
-  {reply, {ok, History}, State#state{clients = maps:put(Socket, Client, Clients)}};
+  {reply, {ok, Client, History}, State#state{clients = maps:put(Socket, Client, Clients)}};
   
 handle_call({authorize, Client}, From, #state{clear_timer = Timer}=State) ->
   erlang:cancel_timer(Timer),
@@ -55,12 +55,12 @@ handle_call({client_disconnected, #de_client{socket = Socket}}, _, #state{client
   end,
   {reply, ok, State#state{clients = NewClients, clear_timer = Timer}};
 
-handle_call({handle_client_message, _Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
+handle_call({handle_client_message, Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
   de_client:broadcast_to(Clients, Message),
-  {reply, ok, State#state{messages = lists:append(Messages,[Message])}};
+  {reply, {ok, Client}, State#state{messages = lists:append(Messages,[Message])}};
 
 handle_call(_Request, _From, State) ->
-  {reply, ok, State}.
+  {reply, unknown, State}.
 
 handle_cast(_Msg, State) ->
   {noreply, State}.

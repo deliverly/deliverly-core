@@ -5,6 +5,8 @@
 
 -export([init/2, websocket_handle/3, websocket_info/3, terminate/3]).
 
+
+%% Client functions
 -export([send/2, close/1]).
 
 %% ------------------------------------------------------------------
@@ -19,21 +21,23 @@ init(Req, _Opts) ->
   {cowboy_websocket, Req, Client}.
 
 websocket_handle(Data, Req, Client) ->
-  case deliverly_server:handle_client_message(Client,decode(Data)) of
-    ok -> {ok, Req, Client};
-    {ok, Response} -> {reply, encode(Response), Req, Client};
-    _ -> {reply, close, Req, Client}
+  case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
+    {ok, Client2} -> {ok, Req, Client2};
+    {ok, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
+    _Other -> 
+      ?D({close_connection ,_Other}),
+      {reply, close, Req, Client}
   end.
 
 websocket_info({authorize, Data}, Req, Client) ->
   case deliverly_server:auth_client(Client, Data) of
-    ok -> {ok, Req, Client};
-    {ok, Response} -> {reply, encode(Response), Req, Client};
+    {ok, Client2} -> {ok, Req, Client2};
+    {ok, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
     _ -> {reply, close, Req, Client}
   end;
 
 websocket_info({handle_message, Data}, Req, Client) ->
-  {reply, encode(Data), Req, Client};
+  {reply, de_client:encode(Client, Data), Req, Client};
 
 websocket_info(handle_close, Req, Client) ->
   {reply, close, Req, Client};
@@ -69,19 +73,7 @@ close(#de_client{socket = Socket}) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-encode(Bin) when is_binary(Bin) ->
-  {binary, Bin};
-
-encode(Data) ->
-  {text, jsx:encode(Data)}.
-
-decode({text,Data}) ->
-  jsx:decode(Data);
-
-decode({binary, Data}) ->
-  Data.
-
 build_client(Req) ->
   App = binary_to_atom(cowboy_req:binding(app,Req,<<"default">>), latin1),
   Path = cowboy_req:path_info(Req),
-  #de_client{connected_at = ulitos:timestamp(), app = App, path = Path, socket = self(), module = ws_handler}.
+  #de_client{connected_at = ulitos:timestamp(), app = App, path = Path, socket = self(), module = ?MODULE, encoder = raw_encoder}.

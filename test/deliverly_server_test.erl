@@ -68,7 +68,7 @@ auth_success_t_() ->
   Res = deliverly_server:auth_client(#de_client{socket=1, app = test_app},[]),
   Size = length(deliverly:connections_list()),
   [
-    ?_assertEqual(ok, Res),
+    ?_assertMatch({ok,_}, Res),
     ?_assertEqual(1, Size)
   ].
 

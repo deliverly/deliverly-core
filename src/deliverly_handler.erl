@@ -5,13 +5,13 @@
 %% Authorize connection to app. Data is additional information provided by client during connection phase.
 %% @end
 
--callback authorize(Client::client(), Data::any()) -> ok | {ok, Data::any()} | {error, Reason::atom()}.
+-callback authorize(Client::client(), Data::any()) -> {ok, Client2::client()} | {ok, Client2::client(), Data::any()} | {error, Reason::atom()}.
 
 %% @doc
-%% Handle incoming data from client
+%% Handle incoming data from client.
 %% @end
  
--callback handle_client_message(Client::client(), Data::any()) -> ok | {ok, Data::any()}.
+-callback handle_client_message(Client::client(), Data::any()) -> {ok, Client2::client()} | {ok, Client2::client(), Data::any()}.
 
 %% @doc
 %% Handle other kind of data (messages from other nodes, external applications)
