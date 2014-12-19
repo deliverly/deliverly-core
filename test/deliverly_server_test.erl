@@ -1,6 +1,7 @@
 -module(deliverly_server_test).
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
+-include_lib("deliverly/include/priv.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -define(setup(F), {setup, fun setup_/0, fun cleanup_/1, F}).

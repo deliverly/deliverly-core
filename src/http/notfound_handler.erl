@@ -1,5 +1,4 @@
 -module(notfound_handler).
--include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
 -export([
   init/2

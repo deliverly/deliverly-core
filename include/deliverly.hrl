@@ -1,9 +1,6 @@
 %% Copyright
 -author("palkan").
 
--define(APP, deliverly).
--define(Config(X,Y),ulitos_app:get_var(?APP,X,Y)).
-
 -record(de_client,{
   connected_at ::non_neg_integer() | atom(),
   module ::atom(),
@@ -12,4 +9,6 @@
   app ::atom()
 }).
 
--type client() ::#de_client{}.
+-type(client() ::#de_client{}).
+
+-export_type([client/0]).

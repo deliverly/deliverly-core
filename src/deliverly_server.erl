@@ -2,6 +2,7 @@
 -behaviour(gen_server).
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
+-include_lib("deliverly/include/priv.hrl").
 -define(SERVER, ?MODULE).
 
 %% ------------------------------------------------------------------

@@ -1,6 +1,7 @@
 -module(deliverly_app).
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
+-include_lib("deliverly/include/priv.hrl").
 -behaviour(application).
 
 %% Application callbacks

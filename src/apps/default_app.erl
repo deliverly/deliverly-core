@@ -2,6 +2,7 @@
 -behaviour(gen_server).
 -behaviour(deliverly_handler).
 -include_lib("deliverly/include/deliverly.hrl").
+-include_lib("deliverly/include/priv.hrl").
 -include_lib("deliverly/include/log.hrl").
 -define(SERVER, ?MODULE).
 
@@ -54,7 +55,7 @@ handle_call({client_disconnected, #de_client{socket = Socket}}, _, #state{client
   end,
   {reply, ok, State#state{clients = NewClients, clear_timer = Timer}};
 
-handle_call({handle_client_message, Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
+handle_call({handle_client_message, _Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
   de_client:broadcast_to(Clients, Message),
   {reply, ok, State#state{messages = lists:append(Messages,[Message])}};
 
