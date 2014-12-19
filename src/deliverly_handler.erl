@@ -11,7 +11,7 @@
 %% Handle incoming data from client.
 %% @end
  
--callback handle_client_message(Client::client(), Data::any()) -> {ok, Client2::client()} | {ok, Client2::client(), Data::any()}.
+-callback handle_client_message(Client::client(), Data::any()) -> ok | {ok, Client2::client()} | {ok, Client2::client(), Data::any()}.
 
 %% @doc
 %% Handle other kind of data (messages from other nodes, external applications)

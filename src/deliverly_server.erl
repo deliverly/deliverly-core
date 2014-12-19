@@ -135,12 +135,16 @@ handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From
     Handler -> 
       Res = Handler:handle_client_message(Client, Data),
       
-      Client2 = element(2, Res),
-      if Client =/= Client2 ->
-        ets:insert(?APP, Client2);
-        true -> pass
+      if Res =:= ok
+        -> pass;
+        true ->
+          Client2 = element(2, Res),
+          if Client =/= Client2 ->
+            ets:insert(?APP, Client2);
+            true -> pass
+          end
       end,
-      
+    
       {reply, Res, State}
   end;
 

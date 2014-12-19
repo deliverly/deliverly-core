@@ -31,7 +31,7 @@ authorize(_,_) -> {error, undefined}.
 
 handle_message(_,_) -> ok.
 
-handle_client_message(Client,_) -> {ok, Client}.
+handle_client_message(_,_) -> ok.
 
 client_disconnected(_) -> ok.
 

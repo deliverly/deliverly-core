@@ -57,7 +57,7 @@ handle_call({client_disconnected, #de_client{socket = Socket}}, _, #state{client
 
 handle_call({handle_client_message, Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
   de_client:broadcast_to(Clients, Message),
-  {reply, {ok, Client}, State#state{messages = lists:append(Messages,[Message])}};
+  {reply, ok, State#state{messages = lists:append(Messages,[Message])}};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
