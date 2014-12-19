@@ -22,6 +22,7 @@ init(Req, _Opts) ->
 
 websocket_handle(Data, Req, Client) ->
   case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
+    ok -> {ok, Req, Client};
     {ok, Client2} -> {ok, Req, Client2};
     {ok, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
     _Other -> 
