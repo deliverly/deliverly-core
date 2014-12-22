@@ -56,21 +56,36 @@ auth_client(Client, Data) ->
 %% Context is defined within App.
 %% @end
 
--spec handle_message(App::atom(), Data::any(), Context::any()) -> ok | {error, Reason::atom()}.
+-spec handle_message(App::atom(), Data::any(), Context::any()) -> ok | broadcast | {error, Reason::atom()}.
 
 handle_message(App, Data, Context) -> 
-  deliverly_nodes:broadcast_message(App, Data, Context),
-  gen_server:call(?SERVER, {handle_message, App, Data, Context}).
+  Res = gen_server:call(?SERVER, {handle_message, App, Data, Context}),
+  Res2 = 
+    if Res =:= broadcast
+      ->  deliverly_nodes:broadcast_message(App, Data, Context),
+          ok;
+      true -> Res    
+  end,
+  Res2.
+  
 
 %% @doc
 %% Process client's data within application.
 %% @end
 
--spec handle_client_message(Client::client(), Data::any()) -> ok | {ok, Response::any()} | {error, Reason::atom()}.
+-spec handle_client_message(Client::client(), Data::any()) -> ok | broadcast | {ok, Client2::client()} | {broadcast, Client2::client()} | {reply, Client2::client(), Data::any()} | {error, Reason::any()}.
 
 handle_client_message(Client, Data) -> 
-  deliverly_nodes:broadcast_client_message(Client, Data),
-  gen_server:call(?SERVER, {handle_client_message, Client, Data}).
+  Res = gen_server:call(?SERVER, {handle_client_message, Client, Data}),
+  Res2 = 
+    case Res of
+      broadcast ->  deliverly_nodes:broadcast_client_message(Client, Data),
+                    ok;
+      {broadcast, Client2} -> gen_server:call(?SERVER, {handle_client_message, Client2, Data}),
+                              {ok, Client2};
+      _ -> Res
+    end,
+  Res2.
 
 %% @doc
 %% Notify app that client has been disconnected.
@@ -135,7 +150,7 @@ handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From
     Handler -> 
       Res = Handler:handle_client_message(Client, Data),
       
-      if Res =:= ok
+      if is_atom(Res) %% ok or broadcast
         -> pass;
         true ->
           Client2 = element(2, Res),

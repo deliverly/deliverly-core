@@ -24,7 +24,7 @@ websocket_handle(Data, Req, Client) ->
   case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
     ok -> {ok, Req, Client};
     {ok, Client2} -> {ok, Req, Client2};
-    {ok, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
+    {reply, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
     _Other -> 
       ?D({close_connection ,_Other}),
       {reply, close, Req, Client}
@@ -33,7 +33,7 @@ websocket_handle(Data, Req, Client) ->
 websocket_info({authorize, Data}, Req, Client) ->
   case deliverly_server:auth_client(Client, Data) of
     {ok, Client2} -> {ok, Req, Client2};
-    {ok, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
+    {reply, Client2, Response} -> {reply, de_client:encode(Client2, Response), Req, Client2};
     _ -> {reply, close, Req, Client}
   end;
 
