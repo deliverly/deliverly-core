@@ -20,6 +20,12 @@ init(Req, _Opts) ->
   self() ! {authorize, Data},
   {cowboy_websocket, Req, Client}.
 
+websocket_handle({pong, _}, Req, Client) ->
+  {ok, Req, Client};
+
+websocket_handle({ping, _}, Req, Client) ->
+  {ok, Req, Client};
+
 websocket_handle(Data, Req, Client) ->
   case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
     ok -> {ok, Req, Client};
