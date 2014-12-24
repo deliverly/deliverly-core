@@ -15,4 +15,7 @@ decode({text,Data}) ->
   jsx:decode(Data, [return_maps]);
 
 decode({binary, Data}) ->
-  Data.
+  Data;
+
+decode(_) ->
+  #{}.
