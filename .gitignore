@@ -24,6 +24,7 @@ out
 # erlang binaries and release
 
 deps
+logs/
 ebin/
 *.beam
 .eunit

@@ -18,9 +18,8 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-  ?I("Start test_app"),
   ok = deliverly:register_handler(test_app, test_app_app),
-  test_app_sup:start_link().
+  ok.
 
 stop(_State) ->
     ok.
