@@ -105,20 +105,12 @@ init(_) ->
   self() ! post_init,  
   {ok, #state{started_at = ulitos:timestamp()}}.
 
-handle_call({register_handler, App, Handler}, _From, #state{apps = Apps}=State) ->
-  case find_handler(App, Apps) of
-    false ->
-      {reply, ok, State#state{apps=maps:put(App, Handler, Apps)}};
-    _ -> 
-      {reply, {error, already_exists}, State}
-  end;
-
 handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, #state{apps = Apps} = State) ->
   case find_handler(App, Apps) of
     false ->
-      ?E({app_not_exist, App}),
+      ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    Handler -> 
+   {NewApps, Handler} -> 
       Res = Handler:authorize(Client, Data),
       case Res of
         {error, Reason} -> 
@@ -129,25 +121,25 @@ handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, #state{a
           ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client2#de_client.path]),
           ets:insert(?APP, Client2)
       end,
-      {reply, Res, State}
+      {reply, Res, State#state{apps = NewApps}}
   end;
 
 handle_call({handle_message, App, Data, Context}, _From, #state{apps = Apps} = State) ->
   case find_handler(App, Apps) of
     false ->
-      ?E({app_not_exist, App}),
+      ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    Handler -> 
+    {NewApps, Handler} -> 
       Res = Handler:handle_message(Data, Context),
-      {reply, Res, State}
+      {reply, Res, State#state{apps = NewApps}}
   end;
 
 handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From, #state{apps = Apps} = State) ->
   case find_handler(App, Apps) of
     false ->
-      ?E({app_not_exist, App}),
+      ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    Handler -> 
+    {NewApps, Handler} -> 
       Res = Handler:handle_client_message(Client, Data),
       
       if is_atom(Res) %% ok or broadcast
@@ -160,19 +152,19 @@ handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From
           end
       end,
     
-      {reply, Res, State}
+      {reply, Res, State#state{apps=NewApps}}
   end;
 
 handle_call({client_disconnected, #de_client{app = App} = Client}, _From, #state{apps = Apps} = State) ->
   ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
   case find_handler(App, Apps) of
     false ->
-      ?E({app_not_exist, App}),
+      ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    Handler -> 
+    {NewApps, Handler} -> 
       Res = Handler:client_disconnected(Client),
       ets:delete(?APP, Client#de_client.socket),
-      {reply, Res, State}
+      {reply, Res, State#state{apps=NewApps}}
   end;
 
 
@@ -189,7 +181,7 @@ handle_info(post_init, State) ->
   case ?Config(default_app, false) of
     true -> 
       ?D(<<"Default app is enabled">>),
-      deliverly_sup:start_server(default_app);
+      deliverly_sup:start_server(default);
     _ -> pass
   end,
   {noreply, State};
@@ -208,4 +200,19 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 
 find_handler(App, Apps) -> 
-  maps:get(App,Apps,false).
+  case maps:get(App,Apps,false) of
+    false -> find_from_code(App, Apps);
+    Handler -> {Apps, Handler}
+  end.
+
+find_from_code(App, Apps) ->
+  case code:is_loaded(App) of
+    false -> false;
+    {file, _} -> 
+      case erlang:function_exported(App, deliverly_handler, 0) of
+        true -> 
+          Handler = erlang:apply(App, deliverly_handler, []),
+          {maps:put(App, Handler, Apps), Handler};
+        false -> false
+      end
+  end.

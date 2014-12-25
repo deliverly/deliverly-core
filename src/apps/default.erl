@@ -1,4 +1,4 @@
--module(default_app).
+-module(default).
 -behaviour(gen_server).
 -behaviour(deliverly_handler).
 -include_lib("deliverly/include/deliverly.hrl").
@@ -7,7 +7,7 @@
 -define(SERVER, ?MODULE).
 
 %% API Function Exports
--export([start_link/0]).
+-export([start_link/0, deliverly_handler/0]).
 %% gen_server Function Exports
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -25,9 +25,11 @@
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+deliverly_handler() ->
+  ?SERVER.
+
 init([]) ->
   ?D(<<"Staring default application">>),
-  self() ! register,
   {ok, #state{}}.
 
 authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).
@@ -64,10 +66,6 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
-
-handle_info(register, State) ->
-  ok = deliverly:register_handler(default, default_app),
-  {noreply, State};
 
 handle_info(clear_history, _State) ->
   ?D({clear_history}),

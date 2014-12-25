@@ -54,38 +54,38 @@ groups() ->
 
 
 ensure_default_started(_) ->
+  deliverly_server:handle_message(default, [], []),
   true = lists:member(default, deliverly:apps_list()),
   ok.
 
 ensure_test_started(_) ->
-  true = lists:member(test_app, deliverly:apps_list()),
+  deliverly_server:handle_message(test_app_app, [], []),
+  true = lists:member(test_app_app, deliverly:apps_list()),
   ok.
 
 
 app_connections_list(_) ->
-  deliverly:register_handler(test_app_bad, test_app_app),
-  deliverly_server:auth_client(#de_client{socket=1, app = test_app},[]),
-  deliverly_server:auth_client(#de_client{socket=2, app = test_app_bad},[]),
-  2 = length(deliverly:connections_list()),
-  1 = length(deliverly:connections_list(test_app)),
+  deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[]),
+  1 = length(deliverly:connections_list()),
+  1 = length(deliverly:connections_list(test_app_app)),
   ok.
 
 
 auth_success(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = test_app},[]),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[]),
   Size = length(deliverly:connections_list()),
   {ok,_} = Res,
   1 = Size,
   ok.
 
 auth_failed(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=2, app = test_app},[{fake, fake}]),
+  Res = deliverly_server:auth_client(#de_client{socket=2, app = test_app_app},[{fake, fake}]),
   Size = length(deliverly:connections_list()),
   {error, _} = Res,
   1 = Size,
   ok.
 
 client_disconnected(_) ->
-  deliverly_server:client_disconnected(#de_client{socket=1, app = test_app}),
+  deliverly_server:client_disconnected(#de_client{socket=1, app = test_app_app}),
   0 = length(deliverly:connections_list()),
   ok.

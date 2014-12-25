@@ -5,7 +5,7 @@
 -behaviour(deliverly_handler).
 
 %% Application callbacks
--export([start/2, stop/1]).
+-export([start/2, stop/1, deliverly_handler/0]).
 
 %% Deverly Handler callbacks.
 -export([authorize/2, handle_message/2, handle_client_message/2, client_disconnected/1]).
@@ -18,11 +18,13 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-  ok = deliverly:register_handler(test_app, test_app_app),
   ok.
 
 stop(_State) ->
     ok.
+
+deliverly_handler() ->
+  test_app_app.
 
 authorize(Client,[]) -> {ok, Client};
 
