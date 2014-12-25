@@ -18,4 +18,4 @@ decode({binary, Data}) ->
   Data;
 
 decode(_) ->
-  #{}.
+  false.

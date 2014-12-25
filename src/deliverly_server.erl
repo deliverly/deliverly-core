@@ -75,6 +75,9 @@ handle_message(App, Data, Context) ->
 
 -spec handle_client_message(Client::client(), Data::any()) -> ok | broadcast | {ok, Client2::client()} | {broadcast, Client2::client()} | {reply, Client2::client(), Data::any()} | {error, Reason::any()}.
 
+%% don't handle bad messages!
+handle_client_message(_, false) -> ok;
+
 handle_client_message(Client, Data) -> 
   Res = gen_server:call(?SERVER, {handle_client_message, Client, Data}),
   Res2 = 
