@@ -72,6 +72,12 @@ send(#de_client{socket = Socket}, Data) ->
   Socket ! {handle_message, Data},
   ok.
 
+%% @doc
+%% Close socket connection 
+%% @end
+
+-spec close(client()) -> ok.
+
 close(#de_client{socket = Socket}) ->
   Socket ! handle_close,
   ok.

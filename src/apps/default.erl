@@ -29,7 +29,7 @@ deliverly_handler() ->
   ?SERVER.
 
 init([]) ->
-  ?D(<<"Staring default application">>),
+  ?D(<<"Starting default application">>),
   {ok, #state{}}.
 
 authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).

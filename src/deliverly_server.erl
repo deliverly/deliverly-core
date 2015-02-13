@@ -104,7 +104,7 @@ client_disconnected(Client) ->
 %% ------------------------------------------------------------------
 
 init(_) ->
-  ets:new(?APP, [public, named_table, {keypos, #de_client.socket}]),
+  ets:new(?APP, [duplicate_bag, public, named_table, {keypos, #de_client.socket}]),
   self() ! post_init,  
   {ok, #state{started_at = ulitos:timestamp()}}.
 
@@ -187,6 +187,8 @@ handle_info(post_init, State) ->
       deliverly_sup:start_server(default);
     _ -> pass
   end,
+  %% run multiplex app
+  deliverly_sup:start_server(mpx),
   {noreply, State};
 
 handle_info(_Info, State) ->

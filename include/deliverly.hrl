@@ -8,6 +8,7 @@
   socket ::pid() | atom(),
   path ::string() | atom(),
   app ::atom(),
+  meta ::any(),
   data ::any()
 }).
 
