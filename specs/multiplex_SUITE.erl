@@ -10,6 +10,7 @@
 
 -define(sub_msg(App), {text, list_to_binary("sub,"++App)}).
 -define(unsub_msg(App), {text, list_to_binary("unsub,"++App)}).
+-define(msg(App, Data), {text, list_to_binary(App++","++Data)}).
 
 init_per_suite(Config) ->
   lager:start(),
@@ -20,15 +21,32 @@ end_per_suite(_) ->
   application:stop(lager),
   ok.
 
-init_per_group(_, Config) ->  
+init_per_group(messages, Config) ->
+  Config_ = init_per_group(subscription, Config),
+  Client = ?config(client, Config_),
+  {ok, _} = test_module:received(Client, ?sub_msg("default")),
+  {ok, _} = test_module:received(Client, ?sub_msg("test_app_app")),
+  Config_;
+
+init_per_group(send_messages, Config) ->
+  Config;
+
+init_per_group(subscription, Config) ->  
+  Config_ = init_per_group(false, Config),
+  Client = test_module:create_client(mpx), 
+  [{client, Client},Config_];
+
+init_per_group(_, Config) ->
   test_module:start(),
   deliverly:start(),
   test_app_app:start([],[]),
   timer:sleep(200),
-  Client = test_module:create_client(mpx), 
-  [{client, Client},Config].
+  Config.
 
-end_per_group(_,Config) ->
+end_per_group(send_messages, Config) ->
+  Config;
+
+end_per_group(_,_Config) ->
   test_app_app:stop([]),
   deliverly:stop(),
   test_module:stop(),
@@ -36,17 +54,47 @@ end_per_group(_,Config) ->
 
 all() ->
   [
-    {group, subscription_tests}
+    {group, subscription},
+    {group, messages},
+    {group, disconnect},
+    {group, unsubscribed}
   ].
 
 groups() ->
   [
     {
-      subscription_tests, [sequence], 
+      subscription, [sequence], 
       [
         subscribe_to_apps,
-        unsubscribe_from_app,
-        client_disconnected
+        unsubscribe_from_app  
+      ]
+    },
+    {
+      disconnect, [shuffle],
+      [
+        client_disconnected_with_apps,
+        client_disconnected_without_apps
+      ]
+    },
+    {
+      messages, [sequence],
+      [
+        {group, send_messages},
+        validate_messages
+      ]
+    },
+    {
+      send_messages, [shuffle, parallel, {repeat, 5}],
+      [
+        send_message_to_default,
+        send_message_to_test_app
+      ]
+    },
+    {
+      unsubscribed, [shuffle],
+      [
+        send_message_without_subscription,
+        send_message_after_unsubscribe
       ]
     }
   ].
@@ -54,9 +102,9 @@ groups() ->
 
 subscribe_to_apps(Config) ->
   Client = ?config(client, Config),
-  test_module:received(Client, ?sub_msg("default")),
+  {ok, _} = test_module:received(Client, ?sub_msg("default")),
   1 = length(deliverly:connections_list(default)),
-  test_module:received(Client, ?sub_msg("test_app_app")),
+  {ok, _} = test_module:received(Client, ?sub_msg("test_app_app")),
   1 = length(deliverly:connections_list(test_app_app)),
   1 = length(deliverly:connections_list(mpx)),
   3 = length(deliverly:connections_list()),
@@ -65,18 +113,68 @@ subscribe_to_apps(Config) ->
 
 unsubscribe_from_app(Config) ->
   Client = ?config(client, Config),
-  test_module:received(Client, ?unsub_msg("default")),
+  {ok, _} = test_module:received(Client, ?unsub_msg("default")),
   0 = length(deliverly:connections_list(default)),
   1 = length(deliverly:connections_list(test_app_app)),
   1 = length(deliverly:connections_list(mpx)),
   2 = length(deliverly:connections_list()),
   ok.
 
-client_disconnected(Config) ->
-  Client = ?config(client, Config),
-  test_module:disconnect(Client),
+client_disconnected_with_apps(Config) ->
+  Client = test_module:create_client(mpx),
+  {ok, _} = test_module:received(Client, ?sub_msg("default")),
+  {ok, _} = test_module:received(Client, ?sub_msg("test_app_app")),
+  1 = length(deliverly:connections_list(default)),
+  1 = length(deliverly:connections_list(test_app_app)),
+  1 = length(deliverly:connections_list(mpx)),  
+  ok = test_module:disconnect(Client),
+  timer:sleep(100),
   0 = length(deliverly:connections_list(default)),
   0 = length(deliverly:connections_list(test_app_app)),
   0 = length(deliverly:connections_list(mpx)),
   0 = length(deliverly:connections_list()),
   ok.
+
+client_disconnected_without_apps(Config) ->
+  Client = test_module:create_client(mpx),
+  ok = test_module:disconnect(Client),
+  timer:sleep(100),
+  0 = length(deliverly:connections_list(mpx)),
+  0 = length(deliverly:connections_list()),
+  ok.
+
+send_message_to_default(Config) ->
+  Client = ?config(client, Config),
+  {ok, _} = test_module:received(Client, ?msg("default", "hello!")),
+  ok.
+
+send_message_to_test_app(Config) ->
+  Client = ?config(client, Config),
+  {ok, _} = test_module:received(Client, ?msg("test_app_app", "goodbye!")),
+  ok.
+
+validate_messages(Config) ->
+  Client = ?config(client, Config),
+  #{sent := S, received := R} = test_module:info(Client),
+  12 = length(S), %% 5 to default,  5 to test_app_app and 2 subs
+  6 = length(R), %% 1 history from default, 5 broadcasts from default 
+  5 = length(default:history()),
+  ok.
+
+send_message_without_subscription(Config) ->
+  Client = test_module:create_client(mpx),
+  close = test_module:received(Client, ?msg("default", "hello!")),
+  timer:sleep(200),
+  0 = length(deliverly:connections_list(mpx)),
+  0 = length(deliverly:connections_list()),
+  #{disconnected := true} = test_module:info(Client).
+
+send_message_after_unsubscribe(Config) ->
+  Client = test_module:create_client(mpx),
+  {ok, _} = test_module:received(Client, ?sub_msg("default")),
+  {ok, _} = test_module:received(Client, ?unsub_msg("default")),
+  close = test_module:received(Client, ?msg("default", "hello!")),
+  timer:sleep(200),
+  0 = length(deliverly:connections_list(mpx)),
+  0 = length(deliverly:connections_list()),
+  #{disconnected := true} = test_module:info(Client).

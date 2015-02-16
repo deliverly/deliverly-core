@@ -48,7 +48,8 @@ received(Id, Data) ->
   gen_server:call(?SERVER, {received, Id, Data}).
 
 disconnect(Id) ->
-  gen_server:call(?SERVER, {disconnect, Id}).
+  ?SERVER ! {disconnect, Id},
+  ok.
 
 send(#de_client{socket=Id}, Data) -> 
   gen_server:call(?SERVER, {send, Id, Data}).
@@ -71,8 +72,8 @@ create_client(App) ->
 create_client(App, AuthData) ->
   gen_server:call(?SERVER, {create_client, App, AuthData}).
 
-info(#de_client{socket=Id}=Client) ->
-  gen_server:call(?SERVER, {info, Id, Client}).
+info(Id) ->
+  gen_server:call(?SERVER, {info, Id}).
 
 init(_) ->
   {ok, #state{}}.
@@ -90,24 +91,21 @@ handle_call({send, Id, Data}, _, #state{clients=Clients}=State) ->
 
 handle_call({received, Id, Data}, _, #state{clients=Clients}=State) ->
   #client_data{sent=Sent, client=Client, received=Received}=ClientData = maps:get(Id, Clients),
-  {Reply, ClientData_} = case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
-    ok -> {{ok, Client},ClientData};
-    {ok, Client2} -> {{ok, Client2},ClientData#client_data{client=Client2}};
-    {reply, Client2, Response} -> {{ok, Client2}, ClientData#client_data{client=Client2, received=[de_client:encode(Client2, Response)|Received]}};
-    _Other -> 
-      {close, ClientData}
-  end,
+  {Reply, ClientData_} = 
+    case deliverly_server:handle_client_message(Client,de_client:decode(Client,Data)) of
+      ok -> {{ok, Client},ClientData};
+      {ok, Client2} -> {{ok, Client2},ClientData#client_data{client=Client2}};
+      {reply, Client2, Response} -> {{ok, Client2}, ClientData#client_data{client=Client2, received=[de_client:encode(Client2, Response)|Received]}};
+      Other -> 
+        self() ! {disconnect, Id},
+        {close, ClientData}
+    end,
   {reply, Reply, State#state{clients = maps:update(Id, ClientData_#client_data{sent=[Data|Sent]}, Clients)}}; 
 
 
 handle_call({info, Id}, _, #state{clients=Clients}=State) ->
-  #client_data{received=R, sent=S} = maps:get(Id, Clients),
-  {reply, #{sent => S, received => R}, State};
-
-handle_call({disconnect, Id}, _, #state{clients=Clients}=State) ->
-  #client_data{client=Client}=ClientData = maps:get(Id, Clients),
-  deliverly_server:client_disconnected(Client),
-  {reply, ok, State#state{clients=maps:update(Id, ClientData#client_data{disconnected=true}, Clients)}};
+  #client_data{received=R, sent=S, disconnected=D} = maps:get(Id, Clients),
+  {reply, #{sent => S, received => R, disconnected => D}, State};
 
 handle_call(_, _, State) -> {reply, ok, State}.
 
@@ -117,10 +115,18 @@ handle_info({info, Client, Receiver},State) ->
   Receiver ! {client_info, Client},
   {noreply, State};
 
-handle_info(stop, State) -> {stop, normal, State};
+handle_info({disconnect, Id}, #state{clients=Clients}=State) ->
+  #client_data{client=Client}=ClientData = maps:get(Id, Clients),
+  deliverly_server:client_disconnected(Client),
+  {noreply, State#state{clients=maps:update(Id, ClientData#client_data{disconnected=true}, Clients)}};
+
+
+handle_info(stop, State) -> 
+  {stop, normal, State};
 
 handle_info(_, State) -> {noreply, State}.
 
-terminate(_Reason, _State) -> ok.
+terminate(_Reason, _State) ->
+  ok.
 
 code_change(_OldVsn, State, _Extra) -> {ok, State}.

@@ -50,7 +50,7 @@ handle_client_message(#de_client{meta=Apps}=Client, {App, unsub}) ->
 
 handle_client_message(#de_client{meta=Apps}=Client, {App, Msg}) ->
   case lists:member(App, Apps) of
-    true -> gen_server:call(?SERVER, {handle_message, Client, App, Msg});
+    true -> gen_server:call(?SERVER, {handle_client_message, Client, App, Msg});
     false -> {error, unsubscribed}
   end.
 

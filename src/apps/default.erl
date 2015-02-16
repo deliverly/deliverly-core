@@ -14,6 +14,9 @@
 %%% Deverly Handler callbacks.
 -export([authorize/2, handle_message/2, handle_client_message/2, client_disconnected/1]).
 
+%%% Public API
+-export([history/0]).
+
 -record(state, {
   clients = #{}::#{pid() => client()},
   messages = [] ::list(),
@@ -27,6 +30,9 @@ start_link() ->
 
 deliverly_handler() ->
   ?SERVER.
+
+history() ->
+  gen_server:call(?SERVER, history).
 
 init([]) ->
   ?D(<<"Starting default application">>),
@@ -57,9 +63,12 @@ handle_call({client_disconnected, #de_client{socket = Socket}}, _, #state{client
   end,
   {reply, ok, State#state{clients = NewClients, clear_timer = Timer}};
 
-handle_call({handle_client_message, _Client, Message}, _, #state{clients = Clients, messages = Messages}=State) ->
-  de_client:broadcast_to(Clients, Message),
+handle_call({handle_client_message, _Client, Message}, _, #state{messages = Messages}=State) ->
+  self() ! {broadcast, Message},
   {reply, broadcast, State#state{messages = lists:append(Messages,[Message])}};
+
+handle_call(history, _, #state{messages=Messages} = State) ->
+  {reply, Messages, State};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
@@ -70,6 +79,10 @@ handle_cast(_Msg, State) ->
 handle_info(clear_history, _State) ->
   ?D({clear_history}),
   {noreply, #state{}};
+
+handle_info({broadcast, Message}, #state{clients=Clients}=State) ->
+  de_client:broadcast_to(Clients, Message),
+  {noreply, State};
 
 handle_info(_Info, State) ->
   {noreply, State}.
