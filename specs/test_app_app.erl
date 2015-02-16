@@ -26,11 +26,13 @@ stop(_State) ->
 deliverly_handler() ->
   test_app_app.
 
-authorize(Client,[]) -> {ok, Client};
+authorize(Client,[]) -> {ok, Client#de_client{encoder=json_encoder}};
 
 authorize(_,_) -> {error, undefined}.
 
 handle_message(_,_) -> ok.
+
+handle_client_message(Client, #{<<"message">> := Msg}) -> {reply, Client, #{reply => Msg}};
 
 handle_client_message(_,_) -> ok.
 

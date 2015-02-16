@@ -51,8 +51,8 @@ disconnect(Id) ->
   ?SERVER ! {disconnect, Id},
   ok.
 
-send(#de_client{socket=Id}, Data) -> 
-  gen_server:call(?SERVER, {send, Id, Data}).
+send(#de_client{socket=Id}=Client, Data) -> 
+  gen_server:cast(?SERVER, {send, Id, de_client:encode(Client, Data)}).
 
 close(#de_client{socket=Id}) -> 
   disconnect(Id).
@@ -85,10 +85,6 @@ handle_call({create_client, App, AuthData}, _, #state{clients=Clients}=State) ->
   Client = element(2, Res),
   {reply, Ref, State#state{clients=maps:put(Ref, #client_data{id=Ref, client=Client}, Clients)}};
 
-handle_call({send, Id, Data}, _, #state{clients=Clients}=State) ->
-  #client_data{received=Received}=ClientData = maps:get(Id, Clients),
-  {reply, ok, State#state{clients = maps:update(Id, ClientData#client_data{received=[Data|Received]}, Clients)}}; 
-
 handle_call({received, Id, Data}, _, #state{clients=Clients}=State) ->
   #client_data{sent=Sent, client=Client, received=Received}=ClientData = maps:get(Id, Clients),
   {Reply, ClientData_} = 
@@ -108,6 +104,14 @@ handle_call({info, Id}, _, #state{clients=Clients}=State) ->
   {reply, #{sent => S, received => R, disconnected => D}, State};
 
 handle_call(_, _, State) -> {reply, ok, State}.
+
+handle_cast({send, Id, close}, State) ->
+  self() ! {disconnect, Id},
+  {noreply, State}; 
+
+handle_cast({send, Id, Data}, #state{clients=Clients}=State) ->
+  #client_data{received=Received}=ClientData = maps:get(Id, Clients),
+  {noreply, State#state{clients = maps:update(Id, ClientData#client_data{received=[Data|Received]}, Clients)}}; 
 
 handle_cast(_, State) -> {noreply, State}.
 

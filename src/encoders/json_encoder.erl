@@ -1,21 +1,21 @@
 -module(json_encoder).
 
 -export([
-  encode/1,
-  decode/1
+  encode/2,
+  decode/2
 ]).
 
-encode(Bin) when is_binary(Bin) ->
+encode(_, Bin) when is_binary(Bin) ->
   {binary, Bin};
 
-encode(Data) ->
+encode(_, Data) ->
   {text, jsx:encode(Data)}.
 
-decode({text,Data}) ->
+decode(_, {text, Data}) ->
   jsx:decode(Data, [return_maps]);
 
-decode({binary, Data}) ->
+decode(_, {binary, Data}) ->
   Data;
 
-decode(_) ->
+decode(_, _) ->
   false.

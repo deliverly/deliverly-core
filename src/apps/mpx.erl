@@ -15,10 +15,10 @@
 -export([authorize/2, handle_message/2, handle_client_message/2, client_disconnected/1]).
 
 %%% encoder functions
--export([decode/1]).
+-export([decode/2, encode/2]).
 
 %%% module functions
--export([send/2, close/1, encode/2]).
+-export([send/2, close/1]).
 
 -record(state,{}).
 
@@ -52,7 +52,9 @@ handle_client_message(#de_client{meta=Apps}=Client, {App, Msg}) ->
   case lists:member(App, Apps) of
     true -> gen_server:call(?SERVER, {handle_client_message, Client, App, Msg});
     false -> {error, unsubscribed}
-  end.
+  end;
+
+handle_client_message(_,_) -> ok.
 
 client_disconnected(Client) -> gen_server:call(?SERVER, {client_disconnected, Client}).
 
@@ -69,14 +71,16 @@ handle_call({subscribe, #de_client{meta=Apps, data=AppData}=Client, App}, _, Sta
             ?ACCESS("AUTH_FAILED ~p ~p ~p",[App, Client#de_client.path, Reason]),
             Res;
           Tuple -> 
-            #de_client{data=NewData}=NewClient = element(2, Res),
+            #de_client{data=Data, encoder=Encoder}=NewClient = element(2, Res),
             ?ACCESS("AUTH_SUCCESS ~p ~p",[App,NewClient#de_client.path]),
             ets:insert(?APP, NewClient),
+            gen_server:cast(?SERVER, {reply_to_client, NewClient, open}),
             if tuple_size(Tuple) =:= 3 ->
               gen_server:cast(?SERVER, {reply_to_client, NewClient, element(3, Tuple)});
               true -> pass
             end,
-            {ok, Client#de_client{meta=[App|Apps], data=set_client_data(App,AppData,data,NewData)}}
+            NewData = #{data => Data, encoder => Encoder},
+            {ok, Client#de_client{meta=[App|Apps], data=maps:put(App, NewData, AppData)}}
         end
     end,
   {reply, Reply, State};
@@ -107,8 +111,9 @@ handle_call({client_disconnected, #de_client{meta=Apps} = Client}, _, State) ->
 
 handle_call({handle_client_message, #de_client{data=AppData}=Client, App, Message}, _, State) ->
   Handler = deliverly_server:find_handler(App),
+  AppClient = app_client(App, Client),
   Reply = 
-    case Handler:handle_client_message(app_client(App, Client), Message) of
+    case Handler:handle_client_message(AppClient, de_client:decode(AppClient, Message)) of
       Atom when is_atom(Atom) -> Atom;
       {error, _}=Error -> Error;
       Tuple ->
@@ -153,7 +158,7 @@ handle_cast({handle_close, #de_client{meta=Module, app=App}=Client}, State) ->
         #de_client{meta = Apps, socket=Socket} ->
           Module:update(Info#de_client{meta = lists:delete(App, Apps)}),
           ets:match_delete(?APP, #de_client{app=App, socket=Socket, _='_'}),
-          send(Client, close)
+          gen_server:cast(?SERVER, {reply_to_client, Client, close})
       end
   end,
   {noreply, State};
@@ -193,12 +198,19 @@ send(#de_client{meta=Module, encoder=Encoder}=Client, Data) ->
 
 -spec encode(client(), Data::any()) -> {Type::atom(), Msg::any()}.
 
+
+encode(#de_client{app=App}, open) ->
+  {text, prepend_msg(App, <<"open">>)};
+
 encode(#de_client{app=App}, close) ->
   {text, prepend_msg(App, <<"close">>)};
 
-encode(#de_client{meta=Encoder,app=App}, Data) ->
-  {Type, Msg} = Encoder:encode(Data),
-  {Type, prepend_msg(App, Msg)}.
+encode(#de_client{meta=Encoder, app=App}=Client, Data) ->
+  case Encoder:encode(Client, Data) of
+    {Type, Msg} -> {Type, prepend_msg(App, Msg)};
+    List when is_list(List) -> encode_list(List, App);
+    _ -> close
+  end.
 
 %% @doc
 %% Unsubscribe client from app. If there is no more apps - close client.
@@ -219,21 +231,26 @@ close(Client) ->
 %% 
 %% All messages are send within apps and use mpx:send/2 method.
 
--spec decode(Msg::any()) -> {App::atom(), Msg::any()}.
+-spec decode(client(), Msg::any()) -> {App::atom(), Msg::any()}.
 
-decode({text,Data}) ->
+decode(_, {text,Data}) ->
   [App, Msg] = split_message(Data),
   parse_msg(binary_to_atom(App,utf8), Msg, text);
 
-decode({binary, Data}) ->
+decode(_, {binary, Data}) ->
   [App, Msg] = split_message(Data),
   parse_msg(binary_to_atom(App,utf8), Msg, binary);
 
-decode(_) -> false.
+decode(_,_) -> false.
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+-spec encode_list(List::list(), App::atom()) -> list().
+
+encode_list(List, App) ->
+  [{Type, prepend_msg(App, Msg)} || {Type, Msg} <- List].
 
 
 -spec prepend_msg(App::atom(), Msg::binary()) -> binary().
@@ -244,11 +261,11 @@ prepend_msg(App, Msg) ->
 
 -spec parse_msg(App::atom(), Msg::binary(), Type::atom()) -> {App::atom(), Msg::any()}.
 
-parse_msg(sub, AppName, _) ->
-  {binary_to_atom(AppName,utf8), sub};
+parse_msg(AppName, <<"sub">>, _) ->
+  {AppName, sub};
 
-parse_msg(unsub, AppName, _) ->
-  {binary_to_atom(AppName,utf8), unsub};
+parse_msg(AppName, <<"unsub">>, _) ->
+  {AppName, unsub};
 
 parse_msg(App, Msg, Type) ->
   {App, {Type, Msg}}.
@@ -269,19 +286,23 @@ split_message(Bin) ->
 -spec app_client(atom(), client()) -> client().
 
 app_client(App, #de_client{module=Mod, data=AppData}=Client) ->
-  Client#de_client{meta=Mod, data=get_client_data(App,AppData,data), encoder=get_client_data(App,AppData,encoder), app=App}.
+  Client#de_client{meta=Mod, data=get_client_data(App,AppData,data), encoder=get_client_data(App,AppData,encoder, raw_encoder), app=App}.
 
 %%% @doc
 %%% Get client-app data by key
 %%% @end
 
--spec get_client_data(atom(), map(), Key::atom()) -> atom().
 
 get_client_data(App, AppData, Key) ->
+  get_client_data(App, AppData, Key, undefined).
+
+-spec get_client_data(atom(), map(), Key::atom(), Default::any()) -> atom().
+
+get_client_data(App, AppData, Key, Default) ->
   maps:get(
     Key,
     maps:get(App, AppData, #{}),
-    undefined
+    Default
   ).
 
 %% @doc
@@ -310,8 +331,8 @@ set_client_data_test() ->
   ?assertMatch(#{app:= #{data := 0}}, set_client_data(app, #{}, data, 0)).
 
 decode_test() ->
-  ?assertEqual({app, {text, <<"binary">>}}, decode({text, <<"app,binary">>})),
-  ?assertEqual({'app/1/2', {binary, <<"binary string, very long, bla">>}}, decode({binary, <<"app/1/2,binary string, very long, bla">>})).
+  ?assertEqual({app, {text, <<"binary">>}}, decode(#de_client{}, {text, <<"app,binary">>})),
+  ?assertEqual({'app/1/2', {binary, <<"binary string, very long, bla">>}}, decode(#de_client{}, {binary, <<"app/1/2,binary string, very long, bla">>})).
 
 encode_test() ->
   C1 = #de_client{meta=raw_encoder, app=app},

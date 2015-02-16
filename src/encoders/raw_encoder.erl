@@ -1,12 +1,12 @@
 -module(raw_encoder).
 
 -export([
-  encode/1,
-  decode/1
+  encode/2,
+  decode/2
 ]).
 
-encode(Data) ->
+encode(_, Data) ->
   Data.
 
-decode(Data) ->
+decode(_, Data) ->
   Data.
