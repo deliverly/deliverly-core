@@ -65,7 +65,7 @@ connections_list() ->
 -spec apps_list() -> list(atom()).
 
 apps_list() ->
-  gen_server:call(?SERVER, {apps_list}).
+  [App || {App,_} <- ets:tab2list(?ETS_HANDLERS)].
 
 %% @doc
 %% Return all active clients for App.

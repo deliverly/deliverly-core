@@ -26,12 +26,12 @@
   auth_client/2,
   handle_message/3,
   handle_client_message/2,
-  client_disconnected/1
+  client_disconnected/1,
+  find_handler/1
 ]).
 
 -record(state, {
-  started_at ::non_neg_integer(),
-  apps = #{} ::#{atom() => atom()}
+  started_at ::non_neg_integer()
 }).
 
 %% ------------------------------------------------------------------
@@ -105,15 +105,16 @@ client_disconnected(Client) ->
 
 init(_) ->
   ets:new(?APP, [duplicate_bag, public, named_table, {keypos, #de_client.socket}]),
+  ets:new(?ETS_HANDLERS, [public, named_table]),
   self() ! post_init,  
   {ok, #state{started_at = ulitos:timestamp()}}.
 
-handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, #state{apps = Apps} = State) ->
-  case find_handler(App, Apps) of
+handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, State) ->
+  case find_handler(App) of
     false ->
       ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-   {NewApps, Handler} -> 
+   Handler -> 
       Res = Handler:authorize(Client, Data),
       case Res of
         {error, Reason} -> 
@@ -124,55 +125,55 @@ handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, #state{a
           ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client2#de_client.path]),
           ets:insert(?APP, Client2)
       end,
-      {reply, Res, State#state{apps = NewApps}}
+      {reply, Res, State}
   end;
 
-handle_call({handle_message, App, Data, Context}, _From, #state{apps = Apps} = State) ->
-  case find_handler(App, Apps) of
+handle_call({handle_message, App, Data, Context}, _From, State) ->
+  case find_handler(App) of
     false ->
       ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    {NewApps, Handler} -> 
+    Handler -> 
       Res = Handler:handle_message(Data, Context),
-      {reply, Res, State#state{apps = NewApps}}
+      {reply, Res, State}
   end;
 
-handle_call({handle_client_message, #de_client{app = App} = Client, Data}, _From, #state{apps = Apps} = State) ->
-  case find_handler(App, Apps) of
+handle_call({handle_client_message, #de_client{app = App, socket = Socket} = Client, Data}, _From, State) ->
+  case find_handler(App) of
     false ->
       ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    {NewApps, Handler} -> 
+    Handler -> 
       Res = Handler:handle_client_message(Client, Data),
       
-      if is_atom(Res) %% ok or broadcast
-        -> pass;
-        true ->
+      case Res of
+        Atom when is_atom(Atom) -> pass; %% ok or broadcast
+        {error, _} -> pass;
+        _ ->
           Client2 = element(2, Res),
           if Client =/= Client2 ->
+            %% first delete matched client (because our ets is dup bag)
+            ets:match_delete(?APP, #de_client{app=App, socket=Socket, _='_'}),
             ets:insert(?APP, Client2);
             true -> pass
           end
       end,
     
-      {reply, Res, State#state{apps=NewApps}}
+      {reply, Res, State}
   end;
 
-handle_call({client_disconnected, #de_client{app = App} = Client}, _From, #state{apps = Apps} = State) ->
+handle_call({client_disconnected, #de_client{app = App} = Client}, _From, State) ->
   ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
-  case find_handler(App, Apps) of
+  case find_handler(App) of
     false ->
       ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
-    {NewApps, Handler} -> 
+    Handler -> 
       Res = Handler:client_disconnected(Client),
       ets:delete(?APP, Client#de_client.socket),
-      {reply, Res, State#state{apps=NewApps}}
+      {reply, Res, State}
   end;
 
-
-handle_call({apps_list}, _From, #state{apps=Apps} = State) ->
-  {reply, maps:keys(Apps), State};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
@@ -200,24 +201,25 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
+find_handler(App) -> 
+  case ets:lookup(?ETS_HANDLERS, App) of
+    [] -> find_from_code(App);
+    [{App, Handler}] -> Handler
+  end.
+
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-find_handler(App, Apps) -> 
-  case maps:get(App,Apps,false) of
-    false -> find_from_code(App, Apps);
-    Handler -> {Apps, Handler}
-  end.
-
-find_from_code(App, Apps) ->
+find_from_code(App) ->
   case code:is_loaded(App) of
     false -> false;
     {file, _} -> 
       case erlang:function_exported(App, deliverly_handler, 0) of
         true -> 
           Handler = erlang:apply(App, deliverly_handler, []),
-          {maps:put(App, Handler, Apps), Handler};
+          ets:insert(?ETS_HANDLERS, {App, Handler}),
+          Handler;
         false -> false
       end
   end.

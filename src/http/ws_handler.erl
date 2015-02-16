@@ -7,7 +7,7 @@
 
 
 %% Client functions
--export([send/2, close/1]).
+-export([send/2, close/1, info/2, update/1]).
 
 %% ------------------------------------------------------------------
 %% cowboy_websocket_handler Function Definitions
@@ -44,10 +44,18 @@ websocket_info({authorize, Data}, Req, Client) ->
   end;
 
 websocket_info({handle_message, Data}, Req, Client) ->
-  {reply, de_client:encode(Client, Data), Req, Client};
+  {reply, Data, Req, Client};
 
 websocket_info(handle_close, Req, Client) ->
   {reply, close, Req, Client};
+
+websocket_info({info, Receiver}, Req, Client) ->
+  Receiver ! {client_info, Client},
+  {ok, Req, Client};
+
+websocket_info({update, NewClient}, Req, _) ->
+  {ok, Req, NewClient};
+
 
 websocket_info(_Info, Req, State) ->
   {ok, Req, State}.
@@ -68,8 +76,8 @@ terminate(_Reason, _Req, Client) ->
 
 -spec send(Client::client(), Data::any()) -> ok.
 
-send(#de_client{socket = Socket}, Data) ->
-  Socket ! {handle_message, Data},
+send(#de_client{socket = Socket}=Client, Data) ->
+  Socket ! {handle_message, de_client:encode(Client, Data)},
   ok.
 
 %% @doc
@@ -80,6 +88,28 @@ send(#de_client{socket = Socket}, Data) ->
 
 close(#de_client{socket = Socket}) ->
   Socket ! handle_close,
+  ok.
+
+%% @doc
+%% Ask websocket to send its state.
+%% Websocket process will send erlang message {client_info, State} to Receiver.
+%% @end
+
+-spec info(client(), Receiver::pid()) -> ok.
+
+info(#de_client{socket = Socket}, Receiver) ->
+  Socket ! {info, Receiver},
+  ok.
+
+
+%% @doc
+%% Update websocket process state
+%% @end
+
+-spec update(client()) -> ok.
+
+update(#de_client{socket=Socket}=Client) ->
+  Socket ! {update, Client},
   ok.
 
 %% ------------------------------------------------------------------

@@ -20,9 +20,7 @@
 %%% module functions
 -export([send/2, close/1, encode/2]).
 
--record(state,{
-  handlers=#{} ::map()
-}).
+-record(state,{}).
 
 start_link() ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
@@ -34,59 +32,131 @@ init([]) ->
   ?D(<<"Starting multiplex application">>),
   {ok, #state{}}.
 
-authorize(Client,_) -> {reply, Client#de_client{data=#{}, encoder=mpx, meta=[]}}.
+authorize(Client,_) -> {ok, Client#de_client{data=#{}, encoder=mpx, meta=[]}}.
 
 handle_message(Data, Context) -> gen_server:call(?SERVER, {handle_message, Data, Context}).
 
-handle_client_message(Client, {App, sub}) -> 
-  gen_server:call(?SERVER, {subscribe, Client, App});
+handle_client_message(#de_client{meta=Apps}=Client, {App, sub}) -> 
+  case lists:member(App, Apps) of
+    false -> gen_server:call(?SERVER, {subscribe, Client, App});
+    true -> {error, already_subscribed}
+  end;
 
-handle_client_message(Client, {App, unsub}) -> 
-  gen_server:call(?SERVER, {unsubscribe, Client, App});
+handle_client_message(#de_client{meta=Apps}=Client, {App, unsub}) -> 
+  case lists:member(App, Apps) of
+    true -> gen_server:call(?SERVER, {unsubscribe, Client, App});
+    false -> {error, unsubscribed}
+  end;
 
 handle_client_message(#de_client{meta=Apps}=Client, {App, Msg}) ->
   case lists:member(App, Apps) of
     true -> gen_server:call(?SERVER, {handle_message, Client, App, Msg});
-    false -> unsubscribed
+    false -> {error, unsubscribed}
   end.
 
 client_disconnected(Client) -> gen_server:call(?SERVER, {client_disconnected, Client}).
 
-handle_call({subscribe, _Client, _App}, _, State) ->
-  {reply, ok, State};
+handle_call({subscribe, #de_client{meta=Apps, data=AppData}=Client, App}, _, State) ->
+  Reply = 
+    case deliverly_server:find_handler(App) of
+      false -> 
+        ?D({app_not_exist, App}),
+        {error, noexist};
+      Handler ->
+        Res = Handler:authorize(app_client(App,Client), []),
+        case Res of
+          {error, Reason} -> 
+            ?ACCESS("AUTH_FAILED ~p ~p ~p",[App, Client#de_client.path, Reason]),
+            Res;
+          Tuple -> 
+            #de_client{data=NewData}=NewClient = element(2, Res),
+            ?ACCESS("AUTH_SUCCESS ~p ~p",[App,NewClient#de_client.path]),
+            ets:insert(?APP, NewClient),
+            if tuple_size(Tuple) =:= 3 ->
+              gen_server:cast(?SERVER, {reply_to_client, NewClient, element(3, Tuple)});
+              true -> pass
+            end,
+            {ok, Client#de_client{meta=[App|Apps], data=set_client_data(App,AppData,data,NewData)}}
+        end
+    end,
+  {reply, Reply, State};
 
-handle_call({unsubscribe, _Client, _App}, _, State) ->
-  {reply, ok, State};
+handle_call({unsubscribe, #de_client{socket=Socket, data=AppData, meta=Apps}=Client, App}, _, State) ->
+  Reply = 
+    case deliverly_server:find_handler(App) of
+      false -> 
+        ?D({app_not_exist, App}),
+        {error, noexist};
+      Handler ->
+        ok = Handler:client_disconnected(app_client(App,Client)),
+        ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
+        ets:match_delete(?APP, #de_client{app=App, socket=Socket, _='_'}),
+        {ok, Client#de_client{meta=lists:delete(App, Apps), data=maps:remove(App, AppData)}}
+    end,
+  {reply, Reply, State};
 
-handle_call({client_disconnected, #de_client{meta=Apps} = Client}, _, #state{handlers=Handlers} = State) ->
+handle_call({client_disconnected, #de_client{meta=Apps} = Client}, _, State) ->
   lists:map(
     fun(App) ->
-      Handler = maps:get(App,Handlers),
+      Handler = deliverly_server:find_handler(App),
       Handler:client_disconnected(app_client(App,Client))
     end,
     Apps
   ),
   {reply, ok, State};
 
-handle_call({handle_client_message, #de_client{data=AppData}=Client, App, Message}, _, #state{handlers=Handlers}=State) ->
-  Handler = maps:get(App, Handlers),
+handle_call({handle_client_message, #de_client{data=AppData}=Client, App, Message}, _, State) ->
+  Handler = deliverly_server:find_handler(App),
   Reply = 
     case Handler:handle_client_message(app_client(App, Client), Message) of
       Atom when is_atom(Atom) -> Atom;
+      {error, _}=Error -> Error;
       Tuple ->
 
         #de_client{data=NewData}=NewClient = element(2, Tuple),
         
-        if tuple_size(Tuple) =:= 3 ->
-          send(NewClient, element(3, Tuple));
-          true -> pass
-        end,
-        {element(1,Tuple), Client#de_client{data=set_client_data(App,AppData,data,NewData)}}
+        Type = 
+          if tuple_size(Tuple) =:= 3 ->
+            gen_server:cast(?SERVER, {reply_to_client, NewClient, element(3, Tuple)}),
+            ok;
+            true -> element(1,Tuple)
+          end,
+        {Type, Client#de_client{data=set_client_data(App,AppData,data,NewData)}}
     end,
   {reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
+
+handle_cast({reply_to_client, Client, Data}, State) ->
+  send(Client, Data),
+  {noreply, State};
+
+handle_cast({handle_close, #de_client{meta=Module, app=App}=Client}, State) ->
+  %% first, request current client real state
+  Module:info(Client, self()),
+  Info = 
+    receive
+      {client_info, Info_} -> Info_
+    after 100
+      -> false
+    end,
+  %% update client state and send unsub message
+  %% or close client
+  if not Info 
+    ->  
+      ?D({failed_to_unsubscribe, Client});
+    true ->
+      case Info of 
+        #de_client{meta = [App]} ->
+          Module:close(Info);
+        #de_client{meta = Apps, socket=Socket} ->
+          Module:update(Info#de_client{meta = lists:delete(App, Apps)}),
+          ets:match_delete(?APP, #de_client{app=App, socket=Socket, _='_'}),
+          send(Client, close)
+      end
+  end,
+  {noreply, State};
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
@@ -123,23 +193,29 @@ send(#de_client{meta=Module, encoder=Encoder}=Client, Data) ->
 
 -spec encode(client(), Data::any()) -> {Type::atom(), Msg::any()}.
 
+encode(#de_client{app=App}, close) ->
+  {text, prepend_msg(App, <<"close">>)};
+
 encode(#de_client{meta=Encoder,app=App}, Data) ->
   {Type, Msg} = Encoder:encode(Data),
   {Type, prepend_msg(App, Msg)}.
 
 %% @doc
-%% Note: Close really disconnects client, not unsubscribes!
+%% Unsubscribe client from app. If there is no more apps - close client.
 %% @end
 
 -spec close(client()) -> ok.
 
-close(#de_client{meta=Module}=Client) ->
-  Module:close(Client).
+close(Client) ->
+  gen_server:cast(?SERVER, {handle_close, Client}).
 
 %% Encoder funtions
 %% 
 %% We need only decode function for mpx, 
 %% because mpx itself doesn't send any messages.
+%% 
+%% The only case when we need encode is when app replies to client's message. 
+%% But we handle it within 'hanle_client_message' calls. 
 %% 
 %% All messages are send within apps and use mpx:send/2 method.
 
@@ -154,7 +230,6 @@ decode({binary, Data}) ->
   parse_msg(binary_to_atom(App,utf8), Msg, binary);
 
 decode(_) -> false.
-
 
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
@@ -205,7 +280,8 @@ app_client(App, #de_client{module=Mod, data=AppData}=Client) ->
 get_client_data(App, AppData, Key) ->
   maps:get(
     Key,
-    maps:get(App, AppData)
+    maps:get(App, AppData, #{}),
+    undefined
   ).
 
 %% @doc
@@ -215,9 +291,9 @@ get_client_data(App, AppData, Key) ->
 -spec set_client_data(App::atom(), AppData::map(), Key::atom(), Val::any()) -> NewAppData::map().
 
 set_client_data(App, AppData, Key, Val) ->
-  maps:update(
+  maps:put(
     App,
-    maps:update(Key, Val, maps:get(App, AppData)),
+    maps:put(Key, Val, maps:get(App, AppData, #{})),
     AppData
   ).
 
@@ -227,11 +303,11 @@ set_client_data(App, AppData, Key, Val) ->
 
 get_client_data_test() ->
   ?assertEqual('x', get_client_data(app, #{app => #{ data => 'x'}}, data)),
-  ?assertError(_, get_client_data(app, #{}, data)).
+  ?assertEqual(undefined, get_client_data(app, #{}, data)).
 
 set_client_data_test() ->
   ?assertMatch(#{app := #{data := 2}}, set_client_data(app, #{app => #{ data => 'x'}}, data, 2)),
-  ?assertError(_, set_client_data(app, #{}, data, 0)).
+  ?assertMatch(#{app:= #{data := 0}}, set_client_data(app, #{}, data, 0)).
 
 decode_test() ->
   ?assertEqual({app, {text, <<"binary">>}}, decode({text, <<"app,binary">>})),

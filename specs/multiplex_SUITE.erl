@@ -8,8 +8,8 @@
 
 -define(config(K,P), proplists:get_value(K,P)).
 
--define(sub_msg(App), list_to_binary("sub,"++App)).
--define(unsub_msg(App), list_to_binary("unsub,"++App)).
+-define(sub_msg(App), {text, list_to_binary("sub,"++App)}).
+-define(unsub_msg(App), {text, list_to_binary("unsub,"++App)}).
 
 init_per_suite(Config) ->
   lager:start(),
@@ -21,12 +21,11 @@ end_per_suite(_) ->
   ok.
 
 init_per_group(_, Config) ->  
-  test_module:start([],[]),
+  test_module:start(),
   deliverly:start(),
   test_app_app:start([],[]),
   timer:sleep(200),
-  Res = deliverly_server:auth_client(#de_client{socket=make_ref(), app = mpx},[]),
-  Client = element(2,Res),
+  Client = test_module:create_client(mpx), 
   [{client, Client},Config].
 
 end_per_group(_,Config) ->
@@ -55,26 +54,29 @@ groups() ->
 
 subscribe_to_apps(Config) ->
   Client = ?config(client, Config),
-  deliverly_server:handle_client_message(Client, ?sub_msg("default")),
+  test_module:received(Client, ?sub_msg("default")),
   1 = length(deliverly:connections_list(default)),
-  deliverly_server:handle_client_message(Client, ?sub_msg("test_app_app")),
+  test_module:received(Client, ?sub_msg("test_app_app")),
   1 = length(deliverly:connections_list(test_app_app)),
-  1 = length(deliverly:connections_list()),
+  1 = length(deliverly:connections_list(mpx)),
+  3 = length(deliverly:connections_list()),
   ok.
 
 
-unsubscribe_to_apps(Config) ->
+unsubscribe_from_app(Config) ->
   Client = ?config(client, Config),
-  deliverly_server:handle_client_message(Client, ?unsub_msg("default")),
+  test_module:received(Client, ?unsub_msg("default")),
   0 = length(deliverly:connections_list(default)),
   1 = length(deliverly:connections_list(test_app_app)),
-  1 = length(deliverly:connections_list()),
+  1 = length(deliverly:connections_list(mpx)),
+  2 = length(deliverly:connections_list()),
   ok.
 
 client_disconnected(Config) ->
   Client = ?config(client, Config),
-  deliverly_server:client_disconnected(Client),
+  test_module:disconnect(Client),
   0 = length(deliverly:connections_list(default)),
   0 = length(deliverly:connections_list(test_app_app)),
+  0 = length(deliverly:connections_list(mpx)),
   0 = length(deliverly:connections_list()),
   ok.
