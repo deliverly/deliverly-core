@@ -234,6 +234,7 @@ close(Client) ->
 -spec decode(client(), Msg::any()) -> {App::atom(), Msg::any()}.
 
 decode(_, {text,Data}) ->
+  ?D({in, Data}),
   [App, Msg] = split_message(Data),
   parse_msg(binary_to_atom(App,utf8), Msg, text);
 
@@ -286,7 +287,7 @@ split_message(Bin) ->
 -spec app_client(atom(), client()) -> client().
 
 app_client(App, #de_client{module=Mod, data=AppData}=Client) ->
-  Client#de_client{meta=Mod, data=get_client_data(App,AppData,data), encoder=get_client_data(App,AppData,encoder, raw_encoder), app=App}.
+  Client#de_client{meta=Mod, module = mpx, data=get_client_data(App,AppData,data), encoder=get_client_data(App,AppData,encoder, raw_encoder), app=App}.
 
 %%% @doc
 %%% Get client-app data by key

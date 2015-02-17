@@ -84,7 +84,7 @@ handle_client_message(Client, Data) ->
     case Res of
       broadcast ->  deliverly_nodes:broadcast_client_message(Client, Data),
                     ok;
-      {broadcast, Client2} -> gen_server:call(?SERVER, {handle_client_message, Client2, Data}),
+      {broadcast, Client2} -> deliverly_nodes:broadcast_client_message(Client2, Data),
                               {ok, Client2};
       _ -> Res
     end,
@@ -177,6 +177,26 @@ handle_call({client_disconnected, #de_client{app = App} = Client}, _From, State)
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
+
+%% Remote event handlers, called from deliverly_nodes
+
+handle_cast({remote_handle_message, App, Data, Context}, State) ->
+  case find_handler(App) of
+    false ->
+      ?D({app_not_exist, App});
+    Handler -> 
+      Res = Handler:handle_message(Data, Context)
+  end,
+  {noreply, State};
+
+handle_cast({remote_handle_client_message, #de_client{app = App} = Client, Data}, State) ->
+  case find_handler(App) of
+    false ->
+      ?D({app_not_exist, App});
+    Handler -> 
+      Res = Handler:handle_client_message(Client, Data)
+  end,
+  {noreply, State};
 
 handle_cast(_Msg, State) ->
   {noreply, State}.

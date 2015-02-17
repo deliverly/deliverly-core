@@ -47,7 +47,7 @@ start_link() ->
 -spec broadcast_client_message(Client::client(), Message::any()) -> ok.
 
 broadcast_client_message(Client, Message) ->
-  gen_server:cast(?SERVER, {cast_nodes, gen_server, call, [deliverly_server, {handle_client_message, Client, Message}]}).
+  gen_server:cast(?SERVER, {cast_nodes, gen_server, cast, [deliverly_server, {remote_handle_client_message, Client, Message}]}).
 
 
 %% @doc
@@ -57,7 +57,7 @@ broadcast_client_message(Client, Message) ->
 -spec broadcast_message(App::atom(), Message::any(), Context::any()) -> ok.
 
 broadcast_message(App, Message, Context) ->
-  gen_server:cast(?SERVER, {cast_nodes, gen_server, call, [deliverly_server, {handle_message, App, Message, Context}]}).
+  gen_server:cast(?SERVER, {cast_nodes, gen_server, cast, [deliverly_server, {remote_handle_message, App, Message, Context}]}).
   
 
 %% ------------------------------------------------------------------
