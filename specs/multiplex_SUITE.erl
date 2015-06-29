@@ -14,8 +14,7 @@
 
 init_per_suite(Config) ->
   lager:start(),
-  ulitos_app:set_var(?APP, default_app, true),
-  ulitos_app:set_var(?APP, default_app_opt, [{auth_token, false}]),
+  ulitos_app:set_var(?APP, default_app, []),
   Config.
 
 end_per_suite(_) ->
