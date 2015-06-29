@@ -25,6 +25,7 @@
   routes = [
     {"/ws/[:app/[...]]", ws_handler, []},
     {"/probe", probe_handler, []},
+    {"/api/auth/token", auth_handler, []},
     {'_', notfound_handler, []}
   ]}).
 

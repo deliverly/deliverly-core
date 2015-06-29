@@ -38,7 +38,18 @@ init([]) ->
   ?D(<<"Starting default application">>),
   {ok, #state{}}.
 
-authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).
+%% authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).
+
+authorize(Client, Data) ->
+  case proplists:get_value(auth_token, ?Config(default_app_opt, []), false) of
+    false ->
+      gen_server:call(?SERVER, {authorize, Client});
+    true ->
+      case de_auth_token:verify(Client, Data) of
+        true -> gen_server:call(?SERVER, {authorize, Client});
+        false -> {error, 3401}
+      end
+  end.
 
 handle_message(_,_) -> ok.
 
