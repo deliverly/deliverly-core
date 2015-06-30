@@ -8,7 +8,6 @@
 
 init_per_suite(Config) ->
   lager:start(),
-  ulitos_app:set_var(?APP, default_app, [{de_auth_token, []}]),
   ulitos_app:set_var(?APP, redis_database, 7),
   Config.
 
@@ -16,13 +15,19 @@ end_per_suite(_) ->
   application:stop(lager),
   ok.
 
-init_per_group(_, Config) ->
+init_per_group(Group, Config) ->
+  Auth =
+    case Group of
+      clients_auth_referer -> {de_auth_referer, ["example.io", "example.org"]};
+      _ -> {de_auth_token, []}
+    end,
+  ulitos_app:set_var(?APP, default, #{auth => [Auth]}),
   deliverly:start(),
   test_app_app:start([],[]),
   timer:sleep(200),
   Config.
 
-end_per_group(_, Config) ->
+end_per_group(_, _Config) ->
   redis_cli:q(["EVAL", "return redis.call('del', unpack(redis.call('keys', ARGV[1])))",  0,  "*"]),
   test_app_app:stop([]),
   deliverly:stop(),
@@ -31,7 +36,9 @@ end_per_group(_, Config) ->
 all() ->
   [
     {group, simple_tests},
-    {group, clients_auth}
+    {group, clients_auth},
+    {group, clients_auth_token},
+    {group, clients_auth_referer}
   ].
 
 groups() ->
@@ -49,14 +56,24 @@ groups() ->
       [
         auth_success,
         auth_failed,
+        client_disconnected
+      ]
+    },
+    {
+      clients_auth_token, [sequence],
+      [
         auth_token_success,
         auth_token_failed,
         auth_token_timeout,
         auth_token_once,
-        auth_token_infinity,
+        auth_token_infinity
+      ]
+    },
+    {
+      clients_auth_referer, [sequence],
+      [
         auth_referer_success,
-        auth_referer_failed,
-        client_disconnected
+        auth_referer_failed
       ]
     }
   ].
@@ -129,19 +146,13 @@ auth_token_infinity(_) ->
   ok.
 
 auth_referer_success(_) ->
-  Opts = ?Config(default_app, []),
-  ulitos_app:set_var(?APP, default_app, [{de_auth_referer, ["example.io", "example.org"]}]),
   Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.io"}, []),
   {reply, _, _} = Res,
-  ulitos_app:set_var(?APP, default_app, Opts),
   ok.
 
 auth_referer_failed(_) ->
-  Opts = ?Config(default_app, []),
-  ulitos_app:set_var(?APP, default_app, [{de_auth_referer, ["example.io", "example.org"]}]),
   Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.boom"}, []),
   {error, 3401} = Res,
-  ulitos_app:set_var(?APP, default_app, Opts),
   ok.
 
 client_disconnected(_) ->

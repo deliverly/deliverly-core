@@ -4,4 +4,8 @@ otp_release:
    - 17.3
 services:
    - redis-server
-script: "rebar compile && rebar eunit skip_deps=true && rebar ct skip_deps=true"
+install:
+   - rebar get-deps apps=gun
+   - rebar get-deps
+   - rebar compile
+script: "rebar eunit skip_deps=true && rebar ct skip_deps=true"

@@ -9,8 +9,9 @@
   host :: string() | atom(),
   path :: string() | atom(),
   app :: atom(),
-  meta ::any(),
-  data ::any()
+  meta = #{} :: #{},
+  mpx = [] :: any(),
+  data :: any()
 }).
 
 -type(client() ::#de_client{}).

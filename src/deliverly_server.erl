@@ -202,7 +202,7 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info(post_init, State) ->
-  case ?Config(default_app, false) of
+  case ?Config(default, false) of
     false ->
       pass;
     _ ->

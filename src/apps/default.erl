@@ -38,12 +38,8 @@ init([]) ->
   ?D(<<"Starting default application">>),
   {ok, #state{}}.
 
-%% authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).
-
 authorize(Client, Data) ->
-  AuthModules = ?Config(default_app, []),
-  Auth = not lists:any(fun({Module, Args}) -> not Module:verify(Client, Data, Args) end, AuthModules),
-  case Auth  of
+  case deliverly_utils:auth_from_config(default, Client, Data) of
     true -> gen_server:call(?SERVER, {authorize, Client});
     false -> {error, 3401}
   end.

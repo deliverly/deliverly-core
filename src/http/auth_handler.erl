@@ -23,7 +23,7 @@ is_authorized(Req, State) ->
       {true, Req, State};
     _ ->
       case cowboy_req:parse_header(<<"authorization">>, Req) of
-        {<<"basic">>, User, Pass} ->
+        {basic, User, Pass} ->
           {true, Req, State};
         _ ->
           {{false, <<"">>}, Req, State}
