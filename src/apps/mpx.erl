@@ -62,7 +62,7 @@ handle_client_message(_,_) -> ok.
 
 client_disconnected(Client) -> gen_server:call(?SERVER, {client_disconnected, Client}).
 
-handle_call({subscribe, #de_client{meta = #{auth := MpxData}, mpx=Apps, data=AppData}=Client, App, Data}, _, State) ->
+handle_call({subscribe, #de_client{meta = Meta, mpx = Apps, data = AppData} = Client, App, Data}, _, State) ->
   Reply = 
     case deliverly_server:find_handler(App) of
       false -> 
@@ -71,7 +71,7 @@ handle_call({subscribe, #de_client{meta = #{auth := MpxData}, mpx=Apps, data=App
       Handler ->
         Res =
           case Data of
-            [] -> Handler:authorize(app_client(App, Client), MpxData);
+            [] -> Handler:authorize(app_client(App, Client), maps:get(auth, Meta, []));
             _ -> Handler:authorize(app_client(App, Client), Data)
           end,
         case Res of

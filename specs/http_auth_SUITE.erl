@@ -72,6 +72,7 @@ token_success(Config) ->
   <<"foo,bar">> = proplists:get_value(<<"scope">>, Data),
   40 = proplists:get_value(<<"expires_in">>, Data),
   true = proplists:get_value(<<"once">>, Data),
+  {<<"token">>, _} = proplists:lookup(<<"token">>, Data),
   ok.
 
 token_failed(Config) ->

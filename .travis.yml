@@ -1,11 +1,7 @@
 language: erlang
 otp_release:
-   - 17.1
-   - 17.3
+  - 17.1
+  - 17.3
 services:
-   - redis-server
-install:
-   - rebar get-deps apps=gun
-   - rebar get-deps
-   - rebar compile
-script: "rebar eunit skip_deps=true && rebar ct skip_deps=true"
+  - redis-server
+script: "rebar compile && rebar eunit skip_deps=true && rebar ct skip_deps=true"
