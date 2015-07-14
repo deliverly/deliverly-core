@@ -202,11 +202,12 @@ handle_cast(_Msg, State) ->
   {noreply, State}.
 
 handle_info(post_init, State) ->
-  case ?Config(default_app, false) of
-    true -> 
+  case ?Config(default, false) of
+    false ->
+      pass;
+    _ ->
       ?D(<<"Default app is enabled">>),
-      deliverly_sup:start_server(default);
-    _ -> pass
+      deliverly_sup:start_server(default)
   end,
   %% run multiplex app
   deliverly_sup:start_server(mpx),

@@ -14,7 +14,7 @@
 
 init_per_suite(Config) ->
   lager:start(),
-  ulitos_app:set_var(?APP, default_app, true),
+  ulitos_app:set_var(?APP, default, #{}),
   Config.
 
 end_per_suite(_) ->
@@ -31,9 +31,9 @@ init_per_group(messages, Config) ->
 init_per_group(send_messages, Config) ->
   Config;
 
-init_per_group(subscription, Config) ->  
+init_per_group(subscription, Config) ->
   Config_ = init_per_group(false, Config),
-  Client = test_module:create_client(mpx), 
+  Client = test_module:create_client(mpx),
   [{client, Client},Config_];
 
 init_per_group(_, Config) ->
@@ -64,10 +64,10 @@ all() ->
 groups() ->
   [
     {
-      subscription, [sequence], 
+      subscription, [sequence],
       [
         subscribe_to_apps,
-        unsubscribe_from_app  
+        unsubscribe_from_app
       ]
     },
     {
@@ -127,7 +127,7 @@ client_disconnected_with_apps(Config) ->
   {ok, _} = test_module:received(Client, ?sub_msg("test_app_app")),
   1 = length(deliverly:connections_list(default)),
   1 = length(deliverly:connections_list(test_app_app)),
-  1 = length(deliverly:connections_list(mpx)),  
+  1 = length(deliverly:connections_list(mpx)),
   ok = test_module:disconnect(Client),
   timer:sleep(100),
   0 = length(deliverly:connections_list(default)),

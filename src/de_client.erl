@@ -38,7 +38,7 @@ send(#de_client{module = M} = Client, Data) ->
 %% Encode data to send to client
 %% @end
 
--spec encode(Client::client(), Data::any()) -> ok.
+-spec encode(Client::client(), Data::any()) -> any().
 encode(#de_client{encoder = M}=Client, Data) ->
   M:encode(Client, Data).
 
@@ -46,7 +46,7 @@ encode(#de_client{encoder = M}=Client, Data) ->
 %% Decode data received from client
 %% @end
 
--spec decode(Client::client(), Data::any()) -> ok.
+-spec decode(Client::client(), Data::any()) -> any().
 decode(#de_client{encoder = M}=Client, Data) ->
   M:decode(Client, Data).
 

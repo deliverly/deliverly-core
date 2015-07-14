@@ -2,14 +2,16 @@
 -author("palkan").
 
 -record(de_client,{
-  connected_at ::non_neg_integer() | atom(),
-  module ::atom(),
-  encoder ::atom(),
+  connected_at :: non_neg_integer() | atom(),
+  module :: atom(),
+  encoder :: atom(),
   socket ::pid() | atom(),
-  path ::string() | atom(),
-  app ::atom(),
-  meta ::any(),
-  data ::any()
+  host :: string() | atom(),
+  path :: string() | atom(),
+  app :: atom(),
+  meta = #{} :: #{},
+  mpx = [] :: any(),
+  data :: any()
 }).
 
 -type(client() ::#de_client{}).

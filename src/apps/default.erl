@@ -38,7 +38,11 @@ init([]) ->
   ?D(<<"Starting default application">>),
   {ok, #state{}}.
 
-authorize(Client,_) -> gen_server:call(?SERVER, {authorize, Client}).
+authorize(Client, Data) ->
+  case deliverly_utils:auth_from_config(default, Client, Data) of
+    true -> gen_server:call(?SERVER, {authorize, Client});
+    false -> {error, 3401}
+  end.
 
 handle_message(_,_) -> ok.
 

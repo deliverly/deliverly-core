@@ -117,6 +117,7 @@ update(#de_client{socket=Socket}=Client) ->
 %% ------------------------------------------------------------------
 
 build_client(Req) ->
-  App = binary_to_atom(cowboy_req:binding(app,Req,<<"default">>), latin1),
+  App = binary_to_atom(cowboy_req:binding(app, Req, <<"default">>), latin1),
   Path = cowboy_req:path_info(Req),
-  #de_client{connected_at = ulitos:timestamp(), app = App, path = Path, socket = self(), module = ?MODULE, encoder = raw_encoder}.
+  Host = binary_to_list(cowboy_req:host(Req)),
+  #de_client{connected_at = ulitos:timestamp(), app = App, host = Host, path = Path, socket = self(), module = ?MODULE, encoder = raw_encoder}.

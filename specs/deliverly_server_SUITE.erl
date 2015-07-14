@@ -8,20 +8,27 @@
 
 init_per_suite(Config) ->
   lager:start(),
-  ulitos_app:set_var(?APP, default_app, true),
+  ulitos_app:set_var(?APP, redis_database, 7),
   Config.
 
 end_per_suite(_) ->
   application:stop(lager),
   ok.
 
-init_per_group(_, Config) ->
+init_per_group(Group, Config) ->
+  Auth =
+    case Group of
+      clients_auth_referer -> {de_auth_referer, ["example.io", "example.org"]};
+      _ -> {de_auth_token, []}
+    end,
+  ulitos_app:set_var(?APP, default, #{auth => [Auth]}),
   deliverly:start(),
   test_app_app:start([],[]),
   timer:sleep(200),
   Config.
 
-end_per_group(_,Config) ->
+end_per_group(_, _Config) ->
+  redis_cli:q(["EVAL", "return redis.call('del', unpack(redis.call('keys', ARGV[1])))",  0,  "*"]),
   test_app_app:stop([]),
   deliverly:stop(),
   ok.
@@ -29,7 +36,9 @@ end_per_group(_,Config) ->
 all() ->
   [
     {group, simple_tests},
-    {group, clients_auth}
+    {group, clients_auth},
+    {group, clients_auth_token},
+    {group, clients_auth_referer}
   ].
 
 groups() ->
@@ -48,6 +57,23 @@ groups() ->
         auth_success,
         auth_failed,
         client_disconnected
+      ]
+    },
+    {
+      clients_auth_token, [sequence],
+      [
+        auth_token_success,
+        auth_token_failed,
+        auth_token_timeout,
+        auth_token_once,
+        auth_token_infinity
+      ]
+    },
+    {
+      clients_auth_referer, [sequence],
+      [
+        auth_referer_success,
+        auth_referer_failed
       ]
     }
   ].
@@ -83,6 +109,50 @@ auth_failed(_) ->
   Size = length(deliverly:connections_list()),
   {error, _} = Res,
   1 = Size,
+  ok.
+
+auth_token_success(_) ->
+  Token = proplists:get_value(token, de_auth_token:request_token(#{})),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {reply, _, _} = Res,
+  ok.
+
+auth_token_failed(_) ->
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, <<"123">>}]),
+  {error, 3401} = Res,
+  ok.
+
+auth_token_timeout(_) ->
+  Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => 1})),
+  timer:sleep(1000),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {error, 3401} = Res,
+  ok.
+
+auth_token_once(_) ->
+  Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => 10, once => true})),
+  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {reply, _, _} = Res1,
+  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {error, 3401} = Res2,
+  ok.
+
+auth_token_infinity(_) ->
+  Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => infinity})),
+  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {reply, _, _} = Res1,
+  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  {reply, _, _} = Res2,
+  ok.
+
+auth_referer_success(_) ->
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.io"}, []),
+  {reply, _, _} = Res,
+  ok.
+
+auth_referer_failed(_) ->
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.boom"}, []),
+  {error, 3401} = Res,
   ok.
 
 client_disconnected(_) ->
