@@ -1,7 +1,7 @@
 -module(de_auth_token).
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
--define(NAMESPACE, <<"delivery:auth:token:">>).
+-include_lib("deliverly/include/priv.hrl").
 
 -export([request_token/1, verify/2, verify/3]).
 
@@ -89,28 +89,33 @@ to_term(_Key, Value) ->
 
 request_token_opt(#{expires_in := infinity, once := true, scope := Apps}) ->
   Token = list_to_binary(ulitos:random_string(8)),
-  redis_cli:q(["SET", <<?NAMESPACE/binary, Token/binary>>, Apps]),
+  Namespace = ?Config(redis_namespace, <<"">>),
+  redis_cli:q(["SET", <<Namespace/binary, Token/binary>>, Apps]),
   [{token, Token}, {once, true}];
 
 request_token_opt(#{expires_in := infinity, once := false, scope := Apps}) ->
   Token = list_to_binary(ulitos:random_string(9)),
-  redis_cli:q(["SET", <<?NAMESPACE/binary, Token/binary>>, Apps]),
+  Namespace = ?Config(redis_namespace, <<"">>),
+  redis_cli:q(["SET", <<Namespace/binary, Token/binary>>, Apps]),
   [{token, Token}];
 
 request_token_opt(#{expires_in := Timeout, once := false, scope := Apps}) ->
   Token = list_to_binary(ulitos:random_string(9)),
-  redis_cli:q(["SETEX", <<?NAMESPACE/binary, Token/binary>>, Timeout, Apps]),
+  Namespace = ?Config(redis_namespace, <<"">>),
+  redis_cli:q(["SETEX", <<Namespace/binary, Token/binary>>, Timeout, Apps]),
   [{token, Token}, {expires_in, Timeout}];
 
 request_token_opt(#{expires_in := Timeout, once := true, scope := Apps}) ->
   Token = list_to_binary(ulitos:random_string(8)),
-  redis_cli:q(["SETEX", <<?NAMESPACE/binary, Token/binary>>, Timeout, Apps]),
+  Namespace = ?Config(redis_namespace, <<"">>),
+  redis_cli:q(["SETEX", <<Namespace/binary, Token/binary>>, Timeout, Apps]),
   [{token, Token}, {expires_in, Timeout}, {once, true}].
 
 -spec get_scope(binary()) -> undefined | binary().
 
 get_scope(Token) when bit_size(Token) == 72 ->
-  case redis_cli:q(["GET", <<?NAMESPACE/binary, Token/binary>>]) of
+  Namespace = ?Config(redis_namespace, <<"">>),
+  case redis_cli:q(["GET", <<Namespace/binary, Token/binary>>]) of
     {ok, undefined} ->
       undefined;
     {ok, Apps} ->
@@ -120,9 +125,10 @@ get_scope(Token) when bit_size(Token) == 72 ->
   end;
 
 get_scope(Token) ->
+  Namespace = ?Config(redis_namespace, <<"">>),
   redis_cli:q(["MULTI"]),
-  redis_cli:q(["GET",  <<?NAMESPACE/binary, Token/binary>>]),
-  redis_cli:q(["DEL",  <<?NAMESPACE/binary, Token/binary>>]),
+  redis_cli:q(["GET",  <<Namespace/binary, Token/binary>>]),
+  redis_cli:q(["DEL",  <<Namespace/binary, Token/binary>>]),
   case redis_cli:q(["EXEC"]) of
     {ok, [undefined, _]} ->
       undefined;
