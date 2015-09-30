@@ -2,3 +2,8 @@
 
 DelivErly core lib
 ======
+
+DelivErly is a real-time  applications platform.
+
+Currently supports the following communication protocols:
+- WebSockets.
