@@ -55,7 +55,8 @@ groups() ->
     {
       success, [sequence],
       [
-        token_success
+        one_token_success,
+        multi_token_success
       ]
     },
     {
@@ -66,13 +67,20 @@ groups() ->
     }
   ].
 
-token_success(Config) ->
+one_token_success(Config) ->
   ConnPid = gun_open(Config),
   {200, Data} = post(ConnPid, Config, [{<<"expires_in">>, <<"40">>}, {<<"scope">>, <<"foo,bar">>}, {<<"once">>, true}]),
   <<"foo,bar">> = proplists:get_value(<<"scope">>, Data),
   40 = proplists:get_value(<<"expires_in">>, Data),
   true = proplists:get_value(<<"once">>, Data),
   {<<"token">>, _} = proplists:lookup(<<"token">>, Data),
+  ok.
+
+multi_token_success(Config) ->
+  ConnPid = gun_open(Config),
+  {200, Data} = post(ConnPid, Config, [{<<"count">>, <<"23">>}]),
+  Tokens = proplists:get_value(<<"tokens">>, Data),
+  true = is_list(Tokens) andalso length(Tokens) =< 23 andalso length(Tokens) > 0,
   ok.
 
 token_failed(Config) ->
