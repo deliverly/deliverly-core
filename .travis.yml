@@ -4,4 +4,4 @@ otp_release:
   - 18.0
 services:
   - redis-server
-script: "rebar compile && rebar eunit skip_deps=true && rebar ct skip_deps=true"
+script: "make test"

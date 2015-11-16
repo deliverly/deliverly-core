@@ -4,7 +4,7 @@
 -include_lib("deliverly/include/deliverly.hrl").
 -include_lib("deliverly/include/log.hrl").
 -include_lib("deliverly/include/priv.hrl").
--define(APPS, [lager, cowboy]).
+-define(APPS, [lager, ulitos, jsx, eredis, poolboy, cowboy]).
 
 %% ------------------------------------------------------------------
 %% Common Application Function Exports

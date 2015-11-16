@@ -45,9 +45,21 @@ add_routes(Routes) ->
 
 init([]) ->
   Port = ?Config(http_port, 8081),
-  ?D({<<"Start HTTP on port">>, Port}),
-  self() ! start,
-  {ok, #state{port = Port}}.
+  ?I({deliverly_http_port, Port}),
+
+  proc_lib:init_ack({ok, self()}),
+
+  State = #state{port = Port},
+
+  Dispatch = cowboy_router:compile([
+    {'_', State#state.routes}
+  ]),
+
+  cowboy:start_http(State#state.listener, 100,
+    [{port, Port}],
+    [{env, [{dispatch, Dispatch}]}]
+  ),
+  {ok, State}.
 
 handle_call(_Request, _From, State) ->
   {reply, ok, State}.
@@ -62,16 +74,6 @@ handle_cast({add_routes, NewRoutes}, #state{listener = Listener, routes = Routes
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
-
-handle_info(start, #state{listener = Listener, port = Port, routes = Routes} = State) ->
-  Dispatch = cowboy_router:compile([
-    {'_', Routes}
-  ]),
-  cowboy:start_http(Listener, 100,
-    [{port, Port}],
-    [{env, [{dispatch, Dispatch}]}]
-  ),
-  {noreply, State};
 
 handle_info(_Info, State) ->
   {noreply, State}.

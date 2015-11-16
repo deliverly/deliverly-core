@@ -7,6 +7,10 @@
                   kernel,
                   stdlib,
                   lager,
+                  ulitos,
+                  jsx,
+                  eredis,
+                  poolboy,
                   cowboy
                  ]},
   {mod, { deliverly_app, []}},

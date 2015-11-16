@@ -29,7 +29,7 @@ deliverly_handler() ->
   ?SERVER.
 
 init([]) ->
-  ?D(<<"Starting multiplex application">>),
+  ?I("Starting multiplex application"),
   {ok, #state{}}.
 
 authorize(Client, Data) ->

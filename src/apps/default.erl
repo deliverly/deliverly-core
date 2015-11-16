@@ -35,7 +35,7 @@ history() ->
   gen_server:call(?SERVER, history).
 
 init([]) ->
-  ?D(<<"Starting default application">>),
+  ?I("Starting default application"),
   {ok, #state{}}.
 
 authorize(Client, Data) ->

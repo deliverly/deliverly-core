@@ -106,8 +106,21 @@ client_disconnected(Client) ->
 init(_) ->
   ets:new(?APP, [duplicate_bag, public, named_table, {keypos, #de_client.socket}]),
   ets:new(?ETS_HANDLERS, [public, named_table]),
-  self() ! post_init,  
-  {ok, #state{started_at = ulitos:timestamp()}}.
+  proc_lib:init_ack({ok, self()}),
+  
+  %% run default app
+  case ?Config(default, false) of
+    false ->
+      pass;
+    _ ->
+      ?I("Default app is enabled"),
+      deliverly_sup:start_server(default)
+  end,
+
+  %% run multiplex app
+  deliverly_sup:start_server(mpx),
+
+  gen_server:enter_loop(?MODULE, [], #state{started_at = ulitos:timestamp()}).
 
 handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, State) ->
   case find_handler(App) of
@@ -200,18 +213,6 @@ handle_cast({remote_handle_client_message, #de_client{app = App} = Client, Data}
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
-
-handle_info(post_init, State) ->
-  case ?Config(default, false) of
-    false ->
-      pass;
-    _ ->
-      ?D(<<"Default app is enabled">>),
-      deliverly_sup:start_server(default)
-  end,
-  %% run multiplex app
-  deliverly_sup:start_server(mpx),
-  {noreply, State};
 
 handle_info(_Info, State) ->
   {noreply, State}.
