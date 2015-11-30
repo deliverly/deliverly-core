@@ -4,4 +4,4 @@ otp_release:
   - 18.0
 services:
   - redis-server
-script: "make test"
+script: "make compile && make test"
