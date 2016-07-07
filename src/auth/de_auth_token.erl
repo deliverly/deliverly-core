@@ -13,7 +13,7 @@
 -spec request_token(Options :: map() | proplists:proplist()) -> proplists:proplist().
 
 request_token(Options) ->
-  random:seed(erlang:now()),
+  random:seed(os:timestamp()),
   NewOptions = merge(Options),
   {Params, Tokens} = request_token_opt(NewOptions),
   NewParams =

@@ -30,3 +30,5 @@ ebin/
 .eunit
 .rebar
 *.dump
+
+_build/

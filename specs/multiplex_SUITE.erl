@@ -160,7 +160,6 @@ validate_messages(Config) ->
   12 = length(S), %% 5 to default,  5 to test_app_app and 2 subs
   13 = length(R), %% 1 history from default, 5 broadcasts from default, 5 replies from test and 2 open
   5 = length(default:history()),
-  ct:log(error, [?HI_IMPORTANCE], "Received: ~p", [R]),
   true = lists:member({text, <<"default,open">>}, R),
   true = lists:member({text, <<"test_app_app,open">>}, R),
   true = lists:member({text, <<"test_app_app,{\"reply\":\"goodbye!\"}">>}, R),

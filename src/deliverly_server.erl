@@ -198,7 +198,7 @@ handle_cast({remote_handle_message, App, Data, Context}, State) ->
     false ->
       ?D({app_not_exist, App});
     Handler -> 
-      Res = Handler:handle_message(Data, Context)
+      _Res = Handler:handle_message(Data, Context)
   end,
   {noreply, State};
 
@@ -207,7 +207,7 @@ handle_cast({remote_handle_client_message, #de_client{app = App} = Client, Data}
     false ->
       ?D({app_not_exist, App});
     Handler -> 
-      Res = Handler:handle_client_message(Client, Data)
+      _Res = Handler:handle_client_message(Client, Data)
   end,
   {noreply, State};
 
