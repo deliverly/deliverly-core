@@ -187,6 +187,14 @@ handle_call({client_disconnected, #de_client{app = App} = Client}, _From, State)
       {reply, Res, State}
   end;
 
+handle_call({register_handler, App, Handler}, _From, State) ->
+  Res = case ets:lookup(?ETS_HANDLERS, App) of
+          [] ->
+            ets:insert(?ETS_HANDLERS, {App, Handler}),
+            ok;
+          _ -> {error, already_exist}
+        end,
+  {reply, Res, State};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
