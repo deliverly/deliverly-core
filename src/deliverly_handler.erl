@@ -2,10 +2,10 @@
 -include_lib("deliverly/include/deliverly.hrl").
 
 %% @doc
-%% Authorize connection to app. Data is additional information provided by client during connection phase.
+%% Authorize connection to app. Data contains parsed query string (`qs`) and underlying request info (`req`).
 %% @end
 
--callback authorize(Client::client(), Data::any()) -> {ok, Client2::client()} | {reply, Client2::client(), Data::any()} | {error, Reason::atom()}.
+-callback authorize(Client::client(), Data::map()) -> {ok, Client2::client()} | {reply, Client2::client(), Data::any()} | {error, Reason::atom()}.
 
 %% @doc
 %% Handle incoming data from client.
