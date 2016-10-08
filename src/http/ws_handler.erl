@@ -13,12 +13,19 @@
 %% cowboy_websocket_handler Function Definitions
 %% ------------------------------------------------------------------
 
-init(Req, _Opts) ->
+init(Req, State) ->
   Client = build_client(Req),
-  Data = cowboy_req:parse_qs(Req),
-  ?D({client_connecting, Client, Data}),
-  self() ! {authorize, Data},
-  {cowboy_websocket, Req, Client}.
+
+  case choose_protocol(Client#de_client.app, Req) of
+    {ok, Req2} ->
+      Data = cowboy_req:parse_qs(Req2),
+      ?D({client_connecting, Client, Data}),
+      self() ! {authorize, Data},
+      {cowboy_websocket, Req2, Client};
+    {error, Reason} ->
+      ?E({ws_init_error, Reason}),
+      {stop, Req, State}
+  end.
 
 websocket_handle({pong, _}, Req, Client) ->
   {ok, Req, Client};
@@ -121,3 +128,29 @@ build_client(Req) ->
   Path = cowboy_req:path_info(Req),
   Host = binary_to_list(cowboy_req:host(Req)),
   #de_client{connected_at = ulitos:timestamp(), app = App, host = Host, path = Path, socket = self(), module = ?MODULE, encoder = raw_encoder}.
+
+choose_protocol(App, Req) ->
+  AppProtocol = ulitos_app:get_var(App, websocket_protocol, undefined),
+
+  case {AppProtocol, cowboy_req:parse_header(<<"sec-websocket-protocol">>, Req)} of
+    {_, undefined} -> {ok, Req};
+    {undefined, Subprotocols} ->
+      ?D({ws_subprotocols, Subprotocols}),
+      {
+        ok,
+        cowboy_req:set_resp_header(
+          <<"sec-websocket-protocol">>,
+          hd(Subprotocols),
+          Req
+        )
+      };
+    {Protocol, Subprotocols} ->
+      ?D({ws_subprotocols, Subprotocols, Protocol}),
+      case lists:keymember(Protocol, 1, Subprotocols) of
+        true -> {ok, cowboy_req:set_resp_header(
+                  <<"sec-websocket-protocol">>,
+                  Protocol,
+                  Req)};
+        false -> {error, wrong_protocol}
+      end
+  end.
