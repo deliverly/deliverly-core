@@ -32,9 +32,9 @@ init([]) ->
   ?I("Starting multiplex application"),
   {ok, #state{}}.
 
-authorize(Client, Data) ->
+authorize(Client, #{ qs := Data } = Req) ->
   case deliverly_utils:auth_from_config(mpx, Client, Data) of
-    true -> {ok, Client#de_client{data = #{}, meta = #{auth => Data}, encoder = mpx, mpx = []}};
+    true -> {ok, Client#de_client{data = #{}, meta = #{auth => Req}, encoder = mpx, mpx = []}};
     false -> {error, 3401}
   end.
 
@@ -69,10 +69,11 @@ handle_call({subscribe, #de_client{meta = Meta, mpx = Apps, data = AppData} = Cl
         ?D({app_not_exist, App}),
         {error, noexist};
       Handler ->
+        Auth = maps:get(auth, Meta),
         Res =
           case Data of
-            [] -> Handler:authorize(app_client(App, Client), maps:get(auth, Meta, []));
-            _ -> Handler:authorize(app_client(App, Client), Data)
+            [] -> Handler:authorize(app_client(App, Client), Auth);
+            _ -> Handler:authorize(app_client(App, Client), Auth#{ qs => Data })
           end,
         case Res of
           {error, Reason} -> 

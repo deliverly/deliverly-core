@@ -23,7 +23,7 @@
 %% ------------------------------------------------------------------
 
 -export([
-  auth_client/2,
+  auth_client/3,
   handle_message/3,
   handle_client_message/2,
   client_disconnected/1,
@@ -46,10 +46,10 @@ start_link() ->
 %% Add client to ETS if authorization was successful.
 %% @end
 
--spec auth_client(Client::client(), Data::any()) -> ok | {ok, Response::any()} | {error, Reason::atom()}.
+-spec auth_client(Client::client(), Data::any(), Req::any()) -> ok | {ok, Response::any()} | {error, Reason::atom()}.
 
-auth_client(Client, Data) -> 
-  gen_server:call(?SERVER, {auth_client, Client, Data}).
+auth_client(Client, Data, Req) -> 
+  gen_server:call(?SERVER, {auth_client, Client, Data, Req}).
 
 %% @doc
 %% Send data to app (precisely, to app's clients).
@@ -122,13 +122,13 @@ init(_) ->
 
   gen_server:enter_loop(?MODULE, [], #state{started_at = ulitos:timestamp()}).
 
-handle_call({auth_client, #de_client{app = App} = Client, Data}, _From, State) ->
+handle_call({auth_client, #de_client{app = App} = Client, Data, Req}, _From, State) ->
   case find_handler(App) of
     false ->
       ?D({app_not_exist, App}),
       {reply, {error, noexist}, State};
    Handler -> 
-      Res = Handler:authorize(Client, Data),
+      Res = Handler:authorize(Client, #{ qs => Data, req => Req }),
       case Res of
         {error, Reason} -> 
           ?ACCESS("AUTH_FAILED ~p ~p ~p",[App,Client#de_client.path,Reason]),

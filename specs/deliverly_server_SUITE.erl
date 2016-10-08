@@ -91,21 +91,21 @@ ensure_test_started(_) ->
 
 
 app_connections_list(_) ->
-  deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[]),
+  deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[], {}),
   1 = length(deliverly:connections_list()),
   1 = length(deliverly:connections_list(test_app_app)),
   ok.
 
 
 auth_success(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[]),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = test_app_app},[], {}),
   Size = length(deliverly:connections_list()),
   {ok,_} = Res,
   1 = Size,
   ok.
 
 auth_failed(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=2, app = test_app_app},[{fake, fake}]),
+  Res = deliverly_server:auth_client(#de_client{socket=2, app = test_app_app},[{fake, fake}], {}),
   Size = length(deliverly:connections_list()),
   {error, _} = Res,
   1 = Size,
@@ -113,45 +113,45 @@ auth_failed(_) ->
 
 auth_token_success(_) ->
   Token = proplists:get_value(token, de_auth_token:request_token(#{})),
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {reply, _, _} = Res,
   ok.
 
 auth_token_failed(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, <<"123">>}]),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, <<"123">>}], {}),
   {error, 3401} = Res,
   ok.
 
 auth_token_timeout(_) ->
   Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => 1})),
   timer:sleep(1000),
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {error, 3401} = Res,
   ok.
 
 auth_token_once(_) ->
   Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => 10, once => true})),
-  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {reply, _, _} = Res1,
-  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {error, 3401} = Res2,
   ok.
 
 auth_token_infinity(_) ->
   Token = proplists:get_value(token, de_auth_token:request_token(#{expires_in => infinity})),
-  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res1 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {reply, _, _} = Res1,
-  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}]),
+  Res2 = deliverly_server:auth_client(#de_client{socket=1, app = default}, [{<<"token">>, Token}], {}),
   {reply, _, _} = Res2,
   ok.
 
 auth_referer_success(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.io"}, []),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.io"}, [], {}),
   {reply, _, _} = Res,
   ok.
 
 auth_referer_failed(_) ->
-  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.boom"}, []),
+  Res = deliverly_server:auth_client(#de_client{socket=1, app = default, host = "example.boom"}, [], {}),
   {error, 3401} = Res,
   ok.
 

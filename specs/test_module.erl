@@ -81,7 +81,7 @@ init(_) ->
 handle_call({create_client, App, AuthData}, _, #state{clients=Clients}=State) ->
   Ref = make_ref(),
   Client_ = #de_client{connected_at = ulitos:timestamp(), app = App, socket = Ref, module = ?MODULE, encoder = raw_encoder},
-  Res = deliverly_server:auth_client(Client_,AuthData),
+  Res = deliverly_server:auth_client(Client_, AuthData, {}),
   Client = element(2, Res),
   {reply, Ref, State#state{clients=maps:put(Ref, #client_data{id=Ref, client=Client}, Clients)}};
 
