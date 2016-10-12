@@ -4,6 +4,7 @@
 -record(de_client,{
   connected_at :: non_neg_integer() | atom(),
   module :: atom(),
+  handler :: atom(),
   encoder :: atom(),
   socket ::pid() | atom(),
   host :: string() | atom(),

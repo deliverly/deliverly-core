@@ -48,8 +48,23 @@ start_link() ->
 
 -spec auth_client(Client::client(), Data::any(), Req::any()) -> ok | {ok, Response::any()} | {error, Reason::atom()}.
 
-auth_client(Client, Data, Req) -> 
-  gen_server:call(?SERVER, {auth_client, Client, Data, Req}).
+auth_client(#de_client{app = App} = Client, Data, Req) ->
+  case resolve_handler(App) of
+    false ->
+      {error, noexist};
+   Handler -> 
+      Res = Handler:authorize(Client#de_client{handler = Handler}, #{ qs => Data, req => Req }),
+      case Res of
+        {error, Reason} -> 
+          ?ACCESS("AUTH_FAILED ~p ~p ~p",[App,Client#de_client.path,Reason]),
+          pass;
+        _ -> 
+          Client2 = element(2, Res),
+          ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client2#de_client.path]),
+          ets:insert(?APP, Client2)
+      end,
+      Res
+  end.
 
 %% @doc
 %% Send data to app (precisely, to app's clients).
@@ -59,15 +74,20 @@ auth_client(Client, Data, Req) ->
 -spec handle_message(App::atom(), Data::any(), Context::any()) -> ok | broadcast | {error, Reason::atom()}.
 
 handle_message(App, Data, Context) -> 
-  Res = gen_server:call(?SERVER, {handle_message, App, Data, Context}),
-  Res2 = 
-    if Res =:= broadcast
-      ->  deliverly_nodes:broadcast_message(App, Data, Context),
-          ok;
-      true -> Res    
-  end,
-  Res2.
-  
+  case resolve_handler(App) of
+    false ->
+      ?D({app_not_exist, App}),
+      {error, noexist};
+    Handler -> 
+      Res = Handler:handle_message(Data, Context),
+      Res2 = 
+        if Res =:= broadcast
+          ->  deliverly_nodes:broadcast_message(App, Data, Context),
+              ok;
+          true -> Res    
+        end,
+      Res2
+  end.  
 
 %% @doc
 %% Process client's data within application.
@@ -78,14 +98,30 @@ handle_message(App, Data, Context) ->
 %% don't handle bad messages!
 handle_client_message(_, false) -> ok;
 
-handle_client_message(Client, Data) -> 
-  Res = gen_server:call(?SERVER, {handle_client_message, Client, Data}),
+handle_client_message(#de_client{handler = Handler, app = App, socket = Socket} = Client, Data) -> 
+  Res = Handler:handle_client_message(Client, Data),
+
+  case Res of
+     Atom when is_atom(Atom) -> pass; %% ok or broadcast
+     {error, _} -> pass;
+     _ ->
+       Client2 = element(2, Res),
+       if Client =/= Client2 ->
+         %% first delete matched client (because our ets is dup bag)
+         ets:match_delete(?APP, #de_client{app = App, socket = Socket, _='_'}),
+         ets:insert(?APP, Client2);
+         true -> pass
+       end
+   end,
+      
   Res2 = 
     case Res of
-      broadcast ->  deliverly_nodes:broadcast_client_message(Client, Data),
-                    ok;
-      {broadcast, Client2} -> deliverly_nodes:broadcast_client_message(Client2, Data),
-                              {ok, Client2};
+      broadcast -> 
+        deliverly_nodes:broadcast_client_message(Client, Data),
+        ok;
+      {broadcast, Client3} ->
+        deliverly_nodes:broadcast_client_message(Client3, Data),
+        {ok, Client3};
       _ -> Res
     end,
   Res2.
@@ -96,8 +132,10 @@ handle_client_message(Client, Data) ->
 
 -spec client_disconnected(Client::client()) -> ok | {error, Reason::atom()}.
 
-client_disconnected(Client) -> 
-  gen_server:call(?SERVER, {client_disconnected, Client}).
+client_disconnected(#de_client{handler = Handler, app = App} = Client) -> 
+  ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
+  ets:delete(?APP, Client#de_client.socket),
+  Handler:client_disconnected(Client).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -122,71 +160,6 @@ init(_) ->
 
   gen_server:enter_loop(?MODULE, [], #state{started_at = ulitos:timestamp()}).
 
-handle_call({auth_client, #de_client{app = App} = Client, Data, Req}, _From, State) ->
-  case find_handler(App) of
-    false ->
-      ?D({app_not_exist, App}),
-      {reply, {error, noexist}, State};
-   Handler -> 
-      Res = Handler:authorize(Client, #{ qs => Data, req => Req }),
-      case Res of
-        {error, Reason} -> 
-          ?ACCESS("AUTH_FAILED ~p ~p ~p",[App,Client#de_client.path,Reason]),
-          pass;
-        _ -> 
-          Client2 = element(2, Res),
-          ?ACCESS("AUTH_SUCCESS ~p ~p",[App,Client2#de_client.path]),
-          ets:insert(?APP, Client2)
-      end,
-      {reply, Res, State}
-  end;
-
-handle_call({handle_message, App, Data, Context}, _From, State) ->
-  case find_handler(App) of
-    false ->
-      ?D({app_not_exist, App}),
-      {reply, {error, noexist}, State};
-    Handler -> 
-      Res = Handler:handle_message(Data, Context),
-      {reply, Res, State}
-  end;
-
-handle_call({handle_client_message, #de_client{app = App, socket = Socket} = Client, Data}, _From, State) ->
-  case find_handler(App) of
-    false ->
-      ?D({app_not_exist, App}),
-      {reply, {error, noexist}, State};
-    Handler -> 
-      Res = Handler:handle_client_message(Client, Data),
-      
-      case Res of
-        Atom when is_atom(Atom) -> pass; %% ok or broadcast
-        {error, _} -> pass;
-        _ ->
-          Client2 = element(2, Res),
-          if Client =/= Client2 ->
-            %% first delete matched client (because our ets is dup bag)
-            ets:match_delete(?APP, #de_client{app=App, socket=Socket, _='_'}),
-            ets:insert(?APP, Client2);
-            true -> pass
-          end
-      end,
-    
-      {reply, Res, State}
-  end;
-
-handle_call({client_disconnected, #de_client{app = App} = Client}, _From, State) ->
-  ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
-  case find_handler(App) of
-    false ->
-      ?D({app_not_exist, App}),
-      {reply, {error, noexist}, State};
-    Handler -> 
-      Res = Handler:client_disconnected(Client),
-      ets:delete(?APP, Client#de_client.socket),
-      {reply, Res, State}
-  end;
-
 handle_call({register_handler, App, Handler}, _From, State) ->
   Res = case ets:lookup(?ETS_HANDLERS, App) of
           [] ->
@@ -195,6 +168,9 @@ handle_call({register_handler, App, Handler}, _From, State) ->
           _ -> {error, already_exist}
         end,
   {reply, Res, State};
+
+handle_call({find_handler, App}, _From, State) ->
+  {reply, find_handler(App), State};
 
 handle_call(_Request, _From, State) ->
   {reply, unknown, State}.
@@ -240,6 +216,9 @@ find_handler(App) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+resolve_handler(App) ->
+  gen_server:call(?SERVER, {find_handler, App}).
 
 find_from_code(App) ->
   case code:is_loaded(App) of

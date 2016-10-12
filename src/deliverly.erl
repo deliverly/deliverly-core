@@ -75,6 +75,3 @@ apps_list() ->
 
 connections_list(App) ->
   ets:match_object(?APP, #de_client{app = App, _ = '_'}).
-
-
-

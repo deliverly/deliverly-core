@@ -156,6 +156,6 @@ auth_referer_failed(_) ->
   ok.
 
 client_disconnected(_) ->
-  deliverly_server:client_disconnected(#de_client{socket=1, app = test_app_app}),
+  deliverly_server:client_disconnected(#de_client{socket=1, app = test_app_app, handler = test_app_app}),
   0 = length(deliverly:connections_list()),
   ok.
