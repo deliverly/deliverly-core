@@ -33,6 +33,15 @@ init([]) ->
     ?CHILD(deliverly_server, worker),
     ?CHILD(deliverly_nodes, worker)
   ],
+  RPoolSpecs = redis_pool_specs(?Config(use_redis, true)),
+  {ok, { {one_for_one, 5, 10}, Children ++ RPoolSpecs} }.
+
+  %%internal
+
+redis_pool_specs(false) ->
+  [];
+
+redis_pool_specs(_) ->
   RSizeArgs = [
     {size, 5},
     {max_overflow, 10}
@@ -42,13 +51,12 @@ init([]) ->
     {worker_module, eredis}
   ] ++ RSizeArgs,
   RedisOpt = [
-    {host, ulitos_app:get_var(?APP, redis_host, "127.0.0.1")},
-    {port, ulitos_app:get_var(?APP, redis_port, 6379)},
-    {database, ulitos_app:get_var(?APP, redis_database, 0)},
-    {password, ulitos_app:get_var(?APP, redis_password, "")},
-    {reconnect_sleep, ulitos_app:get_var(?APP, redis_reconnect_sleep, 100)},
-    {connect_timeout, ulitos_app:get_var(?APP, redis_connect_timeout, 5000)}
+    {host, ?Config(redis_host, "127.0.0.1")},
+    {port, ?Config(redis_port, 6379)},
+    {database, ?Config(redis_database, 0)},
+    {password, ?Config(redis_password, "")},
+    {reconnect_sleep, ?Config(redis_reconnect_sleep, 100)},
+    {connect_timeout, ?Config(redis_connect_timeout, 5000)}
   ],
-  RPoolSpecs = [poolboy:child_spec(?R_POOL, RPoolArgs, RedisOpt)],
-  {ok, { {one_for_one, 5, 10}, Children ++ RPoolSpecs} }.
+  [poolboy:child_spec(?R_POOL, RPoolArgs, RedisOpt)].
 
