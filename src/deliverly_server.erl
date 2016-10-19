@@ -132,6 +132,8 @@ handle_client_message(#de_client{handler = Handler, app = App, socket = Socket} 
 
 -spec client_disconnected(Client::client()) -> ok | {error, Reason::atom()}.
 
+client_disconnected(#de_client{handler = undefined}) -> ok;
+
 client_disconnected(#de_client{handler = Handler, app = App} = Client) -> 
   ?ACCESS("DISCONNECT ~p ~p",[App,Client#de_client.path]),
   ets:delete(?APP, Client#de_client.socket),
