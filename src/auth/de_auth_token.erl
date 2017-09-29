@@ -166,10 +166,5 @@ get_scope(Token) ->
       undefined
   end.
 
--ifdef(ERLANG_OTP_VERSION_18).
-reseed() ->
-  random:seed(os:timestamp()).
--else.
 reseed() ->
   rand:seed(exsplus, os:timestamp()).
--endif.
