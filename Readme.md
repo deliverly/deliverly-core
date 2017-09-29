@@ -8,6 +8,10 @@ DelivErly is a real-time applications platform.
 Currently supports the following communication protocols:
 - WebSockets [Cowboy](https://github.com/ninenines/cowboy).
 
+## Requirements
+
+– Erlang 19+
+
 ## Usage
 
 ### Application Handler
