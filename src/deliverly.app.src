@@ -1,7 +1,7 @@
 {application, deliverly,
  [
   {description, ""},
-  {vsn, "0.0.2"},
+  {vsn, "0.1.0"},
   {registered, []},
   {applications, [
                   kernel,
@@ -14,5 +14,9 @@
                   cowboy
                  ]},
   {mod, { deliverly_app, []}},
+  {maintainers, ["Vlad Dem <palkan>"]},
+  {licenses, ["MIT"]},
+  {links, [{"Github", "https://github.com/deliverly/deliverly-core"}]},
   {env, []}
  ]}.
+ 
