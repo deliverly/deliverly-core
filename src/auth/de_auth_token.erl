@@ -13,7 +13,7 @@
 -spec request_token(Options :: map() | proplists:proplist()) -> proplists:proplist().
 
 request_token(Options) ->
-  random:seed(os:timestamp()),
+  reseed(),
   NewOptions = merge(Options),
   {Params, Tokens} = request_token_opt(NewOptions),
   NewParams =
@@ -165,3 +165,11 @@ get_scope(Token) ->
     _ ->
       undefined
   end.
+
+-ifdef(ERLANG_OTP_VERSION_18).
+reseed() ->
+  random:seed(os:timestamp()).
+-else.
+reseed() ->
+  rand:seed(exsplus, os:timestamp()).
+-endif.
